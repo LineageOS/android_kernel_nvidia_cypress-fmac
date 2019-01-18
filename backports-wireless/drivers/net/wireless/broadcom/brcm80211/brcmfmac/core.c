@@ -1818,6 +1818,200 @@ set_country:
 	return 0;
 }
 
+int
+brcmf_start_mkeep_alive(struct net_device *ndev, u8 keep_alive_id,
+	u8 *ip_pkt, u16 ip_pkt_len, u8* src_mac, u8* dst_mac, u32 period_msec)
+{
+	struct wireless_dev *wdev = ndev->ieee80211_ptr;
+	struct brcmf_if *ifp = NULL;
+	struct brcmf_mkeep_alive_info *keep_alive_pkt;
+	int buf_len = 0;
+	int res = -1;
+	int len_bytes = 0;
+	int i = 0;
+
+	/* ether frame to have both max IP pkt (256 bytes) and ether header */
+	char *pmac_frame;
+
+	if (!wdev)
+		return -ENODEV;
+
+	ifp = netdev_priv(ndev);
+	if (!ifp)
+		return -ENODEV;
+	/*
+	 * The mkeep_alive packet is for STA interface only; if the bss is configured as AP,
+	 * dongle shall reject a mkeep_alive request.
+	 */
+	if (wdev->iftype != NL80211_IFTYPE_STATION) {
+		brcmf_err("sta mode not supported \n");
+		return res;
+	}
+
+	if (ip_pkt_len > MKEEP_ALIVE_IP_PKT_MAX) {
+		brcmf_err("failed to start keep alive-Ip packet len is greater than expected \n");
+		return res;
+	}
+
+	brcmf_dbg(TRACE, "%s execution\n", __FUNCTION__);
+	if ((keep_alive_pkt = kzalloc(KEEP_ALIVE_BUF_SIZE, GFP_KERNEL)) == NULL) {
+		brcmf_err("mkeep_alive pkt alloc failed\n");
+		return -ENOMEM;
+	}
+
+	if ((pmac_frame = kzalloc(KEEP_ALIVE_FRAME_SIZE, GFP_KERNEL)) == NULL) {
+		brcmf_err("failed to allocate mac_frame with size %d\n", KEEP_ALIVE_FRAME_SIZE);
+		res = -ENOMEM;
+		goto exit;
+	}
+
+	memcpy((char *)keep_alive_pkt, &keep_alive_id, sizeof(keep_alive_id));
+
+	/*
+	 * Get current mkeep-alive status.
+	 */
+	res = brcmf_fil_iovar_data_get(ifp, "mkeep_alive", keep_alive_pkt,
+			KEEP_ALIVE_BUF_SIZE);
+	if (res) {
+		brcmf_err("%s: Get mkeep_alive failed (error=%d)\n", __FUNCTION__, res);
+		goto exit;
+	} else {
+		if (le32_to_cpu(keep_alive_pkt->period_msec != 0)) {
+			brcmf_err("%s: Get mkeep_alive failed, ID %u is in use.\n",
+				__FUNCTION__, keep_alive_id);
+			/* Current occupied ID info */
+			brcmf_err("%s: mkeep_alive\n", __FUNCTION__);
+			brcmf_err("   Id    : %d\n"
+				"   Period: %d msec\n"
+				"   Length: %d\n"
+				"   Packet: 0x",
+				keep_alive_pkt->keep_alive_id,
+				le32_to_cpu(keep_alive_pkt->period_msec),
+				le16_to_cpu(keep_alive_pkt->len_bytes));
+
+			for (i = 0; i < keep_alive_pkt->len_bytes; i++) {
+				brcmf_err("%02x", keep_alive_pkt->data[i]);
+			}
+			brcmf_err("\n");
+			// notfound
+			res = -EINVAL;
+			goto exit;
+		}
+	}
+
+	/* Request the specified ID */
+	memset(keep_alive_pkt, 0, MAX_KEEP_ALIVE_PKT_SIZE);
+	keep_alive_pkt->period_msec = cpu_to_le32(period_msec);
+	keep_alive_pkt->version = cpu_to_le16(BRCMF_MKEEP_ALIVE_VERSION);
+	keep_alive_pkt->length = cpu_to_le16(BRCMF_MKEEP_ALIVE_FIXED_LEN);
+
+	/* ID assigned */
+	keep_alive_pkt->keep_alive_id = keep_alive_id;
+
+	buf_len += BRCMF_MKEEP_ALIVE_FIXED_LEN;
+
+	/*
+	 * Build up Ethernet Frame
+	 */
+
+	/* Mapping dest mac addr */
+	memcpy(pmac_frame, dst_mac, ETH_ALEN);
+	pmac_frame += ETH_ALEN;
+
+	/* Mapping src mac addr */
+	memcpy(pmac_frame, src_mac, ETH_ALEN);
+	pmac_frame += ETH_ALEN;
+
+	/* Mapping Ethernet type (ETHERTYPE_IP: 0x0800) */
+	*(pmac_frame++) = 0x08;
+	*(pmac_frame++) = 0x00;
+
+	/* Mapping IP pkt */
+	memcpy(pmac_frame, ip_pkt, ip_pkt_len);
+	pmac_frame += ip_pkt_len;
+
+	/*
+	 * Length of ether frame (assume to be all hexa bytes)
+	 *     = src mac + dst mac + ether type + ip pkt len
+	 */
+	len_bytes = ETH_ALEN*2 + 2 + ip_pkt_len;
+	/* Get back to the beginning. */
+	pmac_frame -= len_bytes;
+	memcpy(keep_alive_pkt->data, pmac_frame, len_bytes);
+	buf_len += len_bytes;
+	keep_alive_pkt->len_bytes = cpu_to_le16(len_bytes);
+
+	res = brcmf_fil_iovar_data_set(ifp, "mkeep_alive", keep_alive_pkt, buf_len);
+
+exit:
+	kfree(pmac_frame);
+	kfree(keep_alive_pkt);
+	return res;
+}
+
+int
+brcmf_stop_mkeep_alive(struct net_device *ndev, u8 keep_alive_id)
+{
+	struct wireless_dev *wdev = ndev->ieee80211_ptr;
+	struct brcmf_mkeep_alive_info *keep_alive_pkt;
+	int res = -1;
+	struct brcmf_if *ifp = NULL;
+
+	if (!wdev)
+		return -ENODEV;
+
+	ifp = netdev_priv(ndev);
+	if (!ifp)
+		return -ENODEV;
+
+	/*
+	 * The mkeep_alive packet is for STA interface only; if the bss is configured as AP,
+	 * dongle shall reject a mkeep_alive request.
+	 */
+	if (wdev->iftype != NL80211_IFTYPE_STATION) {
+		brcmf_err("sta mode not supported \n");
+		return res;
+	}
+	brcmf_dbg(TRACE,"%s execution\n", __FUNCTION__);
+
+	if ((keep_alive_pkt = kzalloc(KEEP_ALIVE_BUF_SIZE, GFP_KERNEL)) == NULL) {
+		brcmf_err("mkeep_alive pkt alloc failed\n");
+		return -ENOMEM;
+	}
+
+	memcpy((char *)keep_alive_pkt, &keep_alive_id, sizeof(keep_alive_id));
+
+	/*
+	 * Get current mkeep-alive status.
+	 */
+	res = brcmf_fil_iovar_data_get(ifp, "mkeep_alive", keep_alive_pkt,
+			KEEP_ALIVE_BUF_SIZE);
+
+	if (res) {
+		brcmf_err("%s: Get mkeep_alive failed (error=%d)\n", __FUNCTION__, res);
+		goto exit;
+	}
+
+	/* Make it stop if available */
+	if (le32_to_cpu(keep_alive_pkt->period_msec != 0)) {
+		brcmf_dbg(INFO,"stop mkeep_alive on ID %d\n", keep_alive_id);
+		memset(keep_alive_pkt, 0, MAX_KEEP_ALIVE_PKT_SIZE);
+		keep_alive_pkt->period_msec = 0;
+		keep_alive_pkt->version = cpu_to_le16(BRCMF_MKEEP_ALIVE_VERSION);
+		keep_alive_pkt->length = cpu_to_le16(BRCMF_MKEEP_ALIVE_FIXED_LEN);
+		keep_alive_pkt->keep_alive_id = keep_alive_id;
+		res = brcmf_fil_iovar_data_set(ifp, "mkeep_alive", keep_alive_pkt,
+				sizeof(struct brcmf_mkeep_alive_info));
+	} else {
+		brcmf_err("%s: Keep alive ID %u does not exist.\n", __FUNCTION__,
+				keep_alive_id);
+		res = -EINVAL;
+	}
+exit:
+	kfree(keep_alive_pkt);
+	return res;
+}
+
 int brcmf_android_priv_cmd(struct net_device *ndev, struct ifreq *ifr, int cmd)
 {
 	struct brcmf_if *ifp = netdev_priv(ndev);

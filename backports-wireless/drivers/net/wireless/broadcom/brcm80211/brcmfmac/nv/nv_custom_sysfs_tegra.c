@@ -214,6 +214,12 @@ tegra_sysfs_on(void)
 	tegra_sysfs_histogram_scan_work_start();
 #endif
 
+#ifdef CPTCFG_BRCMFMAC_NV_CUSTOM_MAC
+	if (dhd_custom_sysfs_tegra_histogram_stat_netdev != NULL) {
+		nv_set_mac_address(
+			dhd_custom_sysfs_tegra_histogram_stat_netdev);
+	}
+#endif
 }
 
 void

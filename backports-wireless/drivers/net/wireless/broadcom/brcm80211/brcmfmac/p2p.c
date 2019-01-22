@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2012 Broadcom Corporation
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,9 +30,9 @@
 #include "p2p.h"
 #include "cfg80211.h"
 #include "feature.h"
-#ifdef CPTCFG_NV_CUSTOM_SCAN
+#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
 #include "nv_custom_sysfs_tegra.h"
-#endif /* CPTCFG_NV_CUSTOM_SCAN */
+#endif /* CPTCFG_NV_CUSTOM_SYSFS_TEGRA */
 
 /* parameters used for p2p escan */
 #define P2PAPI_SCAN_NPROBES 1
@@ -2314,6 +2315,9 @@ struct wireless_dev *brcmf_p2p_add_vif(struct wiphy *wiphy, const char *name,
 		/* set station timeout for p2p */
 		brcmf_fil_cmd_int_set(ifp, BRCMF_C_SET_SCB_TIMEOUT,
 				      BRCMF_SCB_TIMEOUT_VALUE);
+#ifdef CPTCFG_NV_CUSTOM_STATS
+		TEGRA_SYSFS_HISTOGRAM_STAT_INC(ago_start);
+#endif
 	}
 	return &ifp->vif->wdev;
 

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2010 Broadcom Corporation
- * Copyright (C) 2018 NVIDIA Corporation. All rights reserved.
+ * Copyright (C) 2018-2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -346,6 +346,9 @@ void brcmf_netif_rx(struct brcmf_if *ifp, struct sk_buff *skb)
 #ifdef CPTCFG_NV_CUSTOM_CAP
 	/* capture packet histograms before calling netif rx */
 	tegra_sysfs_histogram_tcpdump_rx(skb, __func__, __LINE__);
+#endif
+#ifdef CPTCFG_NV_CUSTOM_STATS
+	TEGRA_SYSFS_HISTOGRAM_WAKE_CNT_INC(skb);
 #endif
 	brcmf_dbg(DATA, "rx proto=0x%X\n", ntohs(skb->protocol));
 	if (in_interrupt())
@@ -1614,6 +1617,9 @@ int brcmf_android_netdev_open(struct net_device *ndev)
 	}
 failed:
 	if (ret) {
+#ifdef CPTCFG_NV_CUSTOM_STATS
+		TEGRA_SYSFS_HISTOGRAM_STAT_INC(wifi_on_fail);
+#endif
 		brcmf_android_wake_unlock(drvr);
 		return ret;
 	}
@@ -1622,6 +1628,12 @@ failed:
 #ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
 	if (ifp->bsscfgidx == 0) {
 		tegra_sysfs_on();
+#ifdef CPTCFG_NV_CUSTOM_STATS
+		if (ret)
+			TEGRA_SYSFS_HISTOGRAM_STAT_INC(wifi_on_fail);
+		else
+			TEGRA_SYSFS_HISTOGRAM_STAT_INC(wifi_on_success);
+#endif
 	}
 #endif
 
@@ -1791,6 +1803,10 @@ brcmf_set_country(struct net_device *ndev, char *country)
 			ccreq.ccode[1] = brcmf_mp_global.country_code_map[i].ccode[1];
 			ccreq.ccode[2] = 0;
 			ccreq.rev = brcmf_mp_global.country_code_map[i].rev;
+#ifdef CPTCFG_NV_CUSTOM_STATS
+			memcpy(bcmdhd_stat.fw_stat.cur_country_code,
+				ccreq.ccode, BRCMF_COUNTRY_BUF_SZ);
+#endif
 			goto set_country;
 		}
 	}

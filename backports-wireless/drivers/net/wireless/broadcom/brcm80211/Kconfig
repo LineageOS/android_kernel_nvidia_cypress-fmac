@@ -154,3 +154,10 @@ config NV_CUSTOM_RF_TEST
 	default y
 	---help---
 	  Enable RF test support for Tegra platform.
+
+config NV_CUSTOM_STATS
+	bool "Stat support for Tegra platform"
+	depends on NV_CUSTOM_SYSFS_TEGRA
+	default y
+	---help---
+	  Enable stat support for Tegra platform.

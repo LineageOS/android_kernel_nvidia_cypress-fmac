@@ -47,10 +47,6 @@
 #include "nv_custom_sysfs_tegra.h"
 #endif /* CPTCFG_NV_CUSTOM_SYSFS_TEGRA */
 
-#ifdef CPTCFG_NV_CUSTOM_SCAN
-#include "nv_custom_sysfs_tegra.h"
-#endif /* CPTCFG_NV_CUSTOM_SCAN */
-
 #define BRCMF_SCAN_IE_LEN_MAX		2048
 
 #define WPA_OUI				"\x00\x50\xF2"	/* WPA OUI */
@@ -1510,9 +1506,24 @@ static void brcmf_link_down(struct brcmf_cfg80211_vif *vif, u16 reason)
 			brcmf_err("WLC_DISASSOC failed (%d)\n", err);
 		}
 		if ((vif->wdev.iftype == NL80211_IFTYPE_STATION) ||
-		    (vif->wdev.iftype == NL80211_IFTYPE_P2P_CLIENT))
+		    (vif->wdev.iftype == NL80211_IFTYPE_P2P_CLIENT)) {
 			cfg80211_disconnected(vif->wdev.netdev, reason, NULL, 0,
 					      true, GFP_KERNEL);
+#ifdef CPTCFG_NV_CUSTOM_STATS
+			if (bcmdhd_stat.gen_stat.rssi < -67)
+				TEGRA_SYSFS_HISTOGRAM_STAT_INC(disconnect_rssi_low);
+			else
+				TEGRA_SYSFS_HISTOGRAM_STAT_INC(disconnect_rssi_high);
+
+			if (reason == 15) {
+				TEGRA_SYSFS_HISTOGRAM_STAT_INC(connect_fail_reason_15);
+				TEGRA_SYSFS_HISTOGRAM_STAT_UPDATE_4WHS();
+			}
+
+			/* Reset per connection lifetime stats */
+			SET_DRV_STAT(aggr_not_assoc_err, 0);
+#endif
+		}
 	}
 	clear_bit(BRCMF_VIF_STATUS_CONNECTING, &vif->sme_state);
 	clear_bit(BRCMF_SCAN_STATUS_SUPPRESS, &cfg->scan_status);
@@ -6056,6 +6067,26 @@ brcmf_bss_connect_done(struct brcmf_cfg80211_info *cfg,
 		cfg80211_connect_done(ndev, &conn_params, GFP_KERNEL);
 		brcmf_dbg(CONN, "Report connect result - connection %s\n",
 			  completed ? "succeeded" : "failed");
+#ifdef CPTCFG_NV_CUSTOM_STATS
+		if (completed) {
+			TEGRA_SYSFS_HISTOGRAM_STAT_INC(connect_success);
+			if ((cfg->channel >= 1) && (cfg->channel <= 14)) {
+				TEGRA_SYSFS_HISTOGRAM_STAT_INC
+					(connect_on_2g_channel);
+			} else if (cfg->channel > 14) {
+				TEGRA_SYSFS_HISTOGRAM_STAT_INC
+					(connect_on_5g_channel);
+			}
+			tegra_sysfs_histogram_stat_set_channel(cfg->channel);
+			if (bcmdhd_stat.gen_stat.channel_stat)
+				TEGRA_SYSFS_HISTOGRAM_STAT_INC
+					(channel_stat->connect_count);
+			TEGRA_SYSFS_HISTOGRAM_STAT_UPDATE_4WHS();
+		} else {
+			TEGRA_SYSFS_HISTOGRAM_STAT_INC(connect_fail);
+			tegra_sysfs_histogram_stat_set_channel(-1);
+		}
+#endif
 	}
 
 	if (test_and_clear_bit(BRCMF_VIF_STATUS_EAP_SUCCESS,

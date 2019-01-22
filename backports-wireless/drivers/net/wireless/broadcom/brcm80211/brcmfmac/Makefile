@@ -115,3 +115,10 @@ brcmfmac-$(CPTCFG_NV_CUSTOM_RF_TEST) += \
 ccflags-y += \
 	-DCPTCFG_NV_CUSTOM_RF_TEST
 endif
+
+ifneq ($(CPTCFG_NV_CUSTOM_STATS),)
+brcmfmac-$(CPTCFG_NV_CUSTOM_STATS) += \
+	nv/nv_stats.o
+ccflags-y += \
+	-DCPTCFG_NV_CUSTOM_STATS
+endif

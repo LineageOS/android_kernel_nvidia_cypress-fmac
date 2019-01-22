@@ -1,4 +1,5 @@
 /* Copyright (c) 2014 Broadcom Corporation
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -34,6 +35,9 @@
 #include "bus.h"
 #include "tracepoint.h"
 
+#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
+#include "nv_custom_sysfs_tegra.h"
+#endif /* CPTCFG_NV_CUSTOM_SYSFS_TEGRA */
 
 #define MSGBUF_IOCTL_RESP_TIMEOUT		msecs_to_jiffies(2000)
 
@@ -372,6 +376,9 @@ brcmf_msgbuf_get_pktid(struct device *dev, struct brcmf_msgbuf_pktids *pktids,
 		return skb;
 	} else {
 		brcmf_err("Invalid packet id %d (not in use)\n", idx);
+#ifdef CPTCFG_NV_CUSTOM_STATS
+		TEGRA_SYSFS_HISTOGRAM_STAT_INC(sdio_tx_err);
+#endif
 	}
 
 	return NULL;

@@ -687,7 +687,14 @@ wifi_scan_work_get_max_channel_list_size(struct wiphy *wiphy,
 			*max_channels_per_scan_work,
 			P2P_MAX_CHANNELS_PER_SCAN_WORK);
 		*max_channels_per_scan_work = P2P_MAX_CHANNELS_PER_SCAN_WORK;
+#ifdef CPTCFG_NV_CUSTOM_STATS
+		TEGRA_SYSFS_HISTOGRAM_DRIVER_STAT_INC(aggr_num_p2p_scans);
+	} else {
+		TEGRA_SYSFS_HISTOGRAM_DRIVER_STAT_INC(aggr_num_sta_scans);
 	}
+#else
+	}
+#endif
 
 }
 

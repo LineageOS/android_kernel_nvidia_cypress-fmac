@@ -263,7 +263,8 @@ tcpdump_pkt_save(char tag, const char *netif, const char *func, int line,
 	pkt.serial_no = 0;
 	pkt.time = 0;
 	pkt.tag = tag;
-	strcpy(pkt.netif, netif);
+	strncpy(pkt.netif, netif, sizeof(pkt.netif));
+	pkt.netif[sizeof(pkt.netif) - 1] = '\0';
 	pkt.func = func;
 	pkt.line = line;
 	pkt.data_nonpaged_len = data_nonpaged_len;
@@ -299,8 +300,19 @@ void
 tegra_sysfs_histogram_tcpdump_rx(struct sk_buff *skb,
 	const char *func, int line)
 {
-	struct net_device *netdev = skb ? skb->dev : NULL;
-	char *netif = netdev ? netdev->name : "";
+	struct net_device *netdev = NULL;
+	char *netif = NULL;
+
+	if (skb == NULL)
+		return;
+
+	netdev = skb->dev;
+	if (netdev == NULL)
+		return;
+
+	netif = netdev->name;
+	if (netif == NULL)
+		return;
 
 	/* check if rx packet logging enabled */
 	if (skb->protocol == ETHER_TYPE_BRCM_REV && lp0_logs_enable == 0)
@@ -326,8 +338,19 @@ void
 tegra_sysfs_histogram_tcpdump_tx(struct sk_buff *skb,
 	const char *func, int line)
 {
-	struct net_device *netdev = skb ? skb->dev : NULL;
-	char *netif = netdev ? netdev->name : "";
+	struct net_device *netdev = NULL;
+	char *netif = "";
+
+	if (skb == NULL)
+		return;
+
+	netdev = skb->dev;
+	if (netdev == NULL)
+		return;
+
+	netif = netdev->name;
+	if (netif == NULL)
+		return;
 
 	/* check if tx packet logging enabled */
 	if (!pkt_tx_save)

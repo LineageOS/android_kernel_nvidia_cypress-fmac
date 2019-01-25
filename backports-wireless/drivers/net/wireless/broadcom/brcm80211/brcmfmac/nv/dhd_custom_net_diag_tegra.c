@@ -43,7 +43,7 @@ int wldev_get_mode(
 	int err = 0;
 	struct brcmf_if *ifp = netdev_priv(dev);
 	struct brcmf_cfg80211_info *cfg = ifp->drvr->config;
-		u32 chanspec;
+	u32 chanspec = 0;
 	struct brcmu_chan ch;
 	struct brcmf_bss_info_le *bi;
 	u8 *buf;
@@ -93,7 +93,7 @@ int wldev_get_mode(
 	} else if (ch.band == NL80211_BAND_5GHZ) {
 		if (ch.bw == BRCMU_CHAN_BW_80) {
 			strcpy(cap, "ac");
-		} else if ((ch.bw = BRCMU_CHAN_BW_40) || (ch.bw == BRCMU_CHAN_BW_20)) {
+		} else if ((ch.bw == BRCMU_CHAN_BW_40) || (ch.bw == BRCMU_CHAN_BW_20)) {
 			if ((bi->nbss_cap & 0xf00) && (bi->n_cap))
 				strcpy(cap, "n|ac");
 			else if (bi->n_cap)

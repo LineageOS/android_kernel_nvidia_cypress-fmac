@@ -678,7 +678,8 @@ wifi_scan_work_get_max_channel_list_size(struct wiphy *wiphy,
 	}
 
 	/* reduce max channels per scan for p2p */
-	if (p2p_ssid || ((test_bit(BRCMF_P2P_STATUS_ENABLED, &p2p->status)) &&
+	if (p2p_ssid || (p2p->status >= 0 &&
+				(test_bit(BRCMF_P2P_STATUS_ENABLED, &p2p->status)) &&
 				(p2p->cfg->scan_request != NULL))) {
 		WIFI_SCAN_DEBUG("%s: P2P SCAN: change max channels per scan"
 			" - %d -> %d\n",
@@ -808,6 +809,7 @@ wifi_scan_request(wl_cfg80211_scan_funcptr_t scan_func,
 	unsigned int msec;
 	struct wifi_scan_policy *scan_policy;
 	struct wifi_scan_rule *scan_rule;
+	bool schedule_wk = false;
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(4, 7, 0))
         struct cfg80211_scan_info info = {0};
@@ -1091,15 +1093,19 @@ wifi_scan_request(wl_cfg80211_scan_funcptr_t scan_func,
 		 * - TEGRA_SCAN_DONE() macro will schedule next delayed work
 		 */
 		if (total_scan_rule - skipped_scan_rule == 0) {
-			queue_delayed_work(wifi_scan_work_queue,
-				&wifi_scan_work_list[i].dwork,
-				wifi_scan_work_list[i].jiffies_scheduled_min
-					- now);
+			schedule_wk = true;
 		}
 		/* increment count of wifi scan rule(s) added */
 		total_scan_rule++;
 	}
 
+	if (schedule_wk) {
+		WIFI_SCAN_DEBUG("%s: schedule scan work\n", __func__);
+		queue_delayed_work(wifi_scan_work_queue,
+			&wifi_scan_work_list[0].dwork,
+			wifi_scan_work_list[0].jiffies_scheduled_min
+				- now);
+	}
 	/* unlock semaphore */
 	up(&wifi_scan_lock);
 
@@ -1149,6 +1155,8 @@ wifi_scan_request_done(struct cfg80211_scan_request *request, bool aborted)
 			scan_arg.request_and_channels.request);
 	struct wifi_scan_work *next_scan_work = NULL;
 	int err = -1;
+	int rules_active = 0;
+	struct cfg80211_scan_request *original_scan_request = NULL;
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(4, 7, 0))
         struct cfg80211_scan_info info = {0};
 #endif
@@ -1169,23 +1177,17 @@ wifi_scan_request_done(struct cfg80211_scan_request *request, bool aborted)
 			WIFI_SCAN_DEBUG("%s no original scan request exist\n", __func__);
 			return 0;
 		}
-		/* decrement count of wifi scan rules active */
-		if (atomic_dec_and_test(&wifi_scan_work_rules_active) || aborted) {
-			WIFI_SCAN_DEBUG("%s: finished all scan work(s)"
-				" - calling cfg80211_scan_done()"
-				" for original request %p\n",
-				__func__,
-				scan_work->original_scan_request);
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(4, 7, 0))
-			info.aborted = false;
-			cfg80211_scan_done(scan_work->original_scan_request, &info);
-#else
-			cfg80211_scan_done(scan_work->original_scan_request,
-				false);
-#endif
+		// if aborted delete all rules
+		if (aborted) {
+			WIFI_SCAN_DEBUG("%s scan Aborted\n", __func__);
 			atomic_set(&wifi_scan_work_rules_active, 0);
-			err = 0;
-		} else {
+		}
+		else {
+			rules_active = atomic_dec_return(&wifi_scan_work_rules_active);
+			WIFI_SCAN_DEBUG("%s Pending rules %d\n", __func__, rules_active);
+		}
+
+		if (rules_active > 0) {
 			WIFI_SCAN_DEBUG("%s get next scan work\n", __func__);
 			/* get next wifi scan work to be scheduled */
 			next_scan_work = scan_work + 1;
@@ -1195,9 +1197,19 @@ wifi_scan_request_done(struct cfg80211_scan_request *request, bool aborted)
 				(next_scan_work->original_scan_request
 					!= scan_work->original_scan_request)) {
 				next_scan_work = NULL;
+				WIFI_SCAN_DEBUG("%s next scan work is null\n", __func__);
+				original_scan_request = scan_work->original_scan_request;
 			}
 			/* return index (>= 0) of scan work */
 			err = (int) (scan_work - wifi_scan_work_list);
+		} else if (rules_active == 0) {
+			WIFI_SCAN_DEBUG("%s: finished all scan work(s)"
+				" - calling cfg80211_scan_done()"
+				" for original request %p\n",
+				__func__,
+				scan_work->original_scan_request);
+			original_scan_request = scan_work->original_scan_request;
+			err = 0;
 		}
 	}
 
@@ -1217,20 +1229,14 @@ wifi_scan_request_done(struct cfg80211_scan_request *request, bool aborted)
 				scan_work);
 			scan_work->original_scan_request = NULL;
 		}
-		if (scan_work->original_scan_request == request ||
-			(atomic_read(&wifi_scan_work_rules_active) <= 0)) {
+		if (scan_work->original_scan_request == request || original_scan_request) {
 #if 0 // suppress prints
 			WIFI_SCAN_DEBUG("%s: TEGRA_SCAN_DONE:"
 				" scan_work #%d (%p)"
-				" - original scan request done\n",
+				" - original scan request done %p\n",
 				__func__,
 				(int) (scan_work - wifi_scan_work_list),
-				scan_work);
-			if (_aborted_) {
-				pr_err/*WIFI_SCAN_DEBUG*/("%s: TEGRA_SCAN_DONE:"
-					" - abort pending work\n",
-					__func__);
-			}
+				scan_work, original_scan_request);
 #endif
 			cancel_delayed_work(&scan_work->dwork);
 			scan_work->original_scan_request = NULL;
@@ -1283,6 +1289,15 @@ wifi_scan_request_done(struct cfg80211_scan_request *request, bool aborted)
 				&next_scan_work->dwork,
 				0);
 		}
+	}
+
+	if (original_scan_request) {
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(4, 7, 0))
+		info.aborted = false;
+		cfg80211_scan_done(original_scan_request, &info);
+#else
+		cfg80211_scan_done(original_scan_request, false);
+#endif
 	}
 
 	/* return -1 if not processed, >= 0 if processed */

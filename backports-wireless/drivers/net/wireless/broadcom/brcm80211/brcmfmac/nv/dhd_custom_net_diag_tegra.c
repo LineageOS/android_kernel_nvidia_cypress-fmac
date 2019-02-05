@@ -379,4 +379,6 @@ void tegra_net_diag_unregister(struct device *dev)
 		tegra_net_diag_wq = NULL;
 	}
 
+	/* remove sysfs */
+	sysfs_remove_file(&dev->kobj, &dev_attr_net_diag.attr);
 }

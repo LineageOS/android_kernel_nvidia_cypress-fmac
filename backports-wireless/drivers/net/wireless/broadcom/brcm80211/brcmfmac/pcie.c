@@ -1920,7 +1920,7 @@ brcmf_pcie_remove(struct pci_dev *pdev)
 	if (bus == NULL)
 		return;
 #ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
-		tegra_sysfs_bus_unregister(&pdev->dev);
+	tegra_sysfs_bus_unregister(&pdev->dev);
 #endif
 
 	devinfo = bus->bus_priv.pcie->devinfo;
@@ -1962,6 +1962,9 @@ static int brcmf_pcie_pm_enter_D3(struct device *dev)
 
 	brcmf_dbg(PCIE, "Enter\n");
 
+#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
+	tegra_sysfs_suspend();
+#endif
 	bus = dev_get_drvdata(dev);
 	devinfo = bus->bus_priv.pcie->devinfo;
 
@@ -1976,14 +1979,14 @@ static int brcmf_pcie_pm_enter_D3(struct device *dev)
 	if (!devinfo->mbdata_completed) {
 		brcmf_err("Timeout on response for entering D3 substate\n");
 		brcmf_bus_change_state(bus, BRCMF_BUS_UP);
+#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
+		tegra_sysfs_resume();
+#endif
 		return -EIO;
 	}
 
 	devinfo->state = BRCMFMAC_PCIE_STATE_DOWN;
 	brcmf_android_wake_lock_waive(bus->drvr, false);
-#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
-	tegra_sysfs_suspend();
-#endif
 
 	return 0;
 }
@@ -2002,9 +2005,6 @@ static int brcmf_pcie_pm_leave_D3(struct device *dev)
 	devinfo = bus->bus_priv.pcie->devinfo;
 	brcmf_dbg(PCIE, "Enter, dev=%p, bus=%p\n", dev, bus);
 
-#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
-	tegra_sysfs_resume();
-#endif
 	/* Check if device is still up and running, if so we are ready */
 	if (brcmf_pcie_read_reg32(devinfo, BRCMF_PCIE_PCIE2REG_INTMASK) != 0) {
 		brcmf_dbg(PCIE, "Try to wakeup device....\n");
@@ -2015,6 +2015,9 @@ static int brcmf_pcie_pm_leave_D3(struct device *dev)
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
 		brcmf_bus_change_state(bus, BRCMF_BUS_UP);
 		brcmf_pcie_intr_enable(devinfo);
+#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
+		tegra_sysfs_resume();
+#endif
 		return 0;
 	}
 

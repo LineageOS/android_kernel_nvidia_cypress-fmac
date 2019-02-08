@@ -343,6 +343,10 @@ void brcmf_netif_rx(struct brcmf_if *ifp, struct sk_buff *skb)
 	ifp->ndev->stats.rx_bytes += skb->len;
 	ifp->ndev->stats.rx_packets++;
 
+#ifdef CPTCFG_NV_CUSTOM_CAP
+	/* capture packet histograms before calling netif rx */
+	tegra_sysfs_histogram_tcpdump_rx(skb, __func__, __LINE__);
+#endif
 	brcmf_dbg(DATA, "rx proto=0x%X\n", ntohs(skb->protocol));
 	if (in_interrupt())
 		netif_rx(skb);
@@ -352,9 +356,6 @@ void brcmf_netif_rx(struct brcmf_if *ifp, struct sk_buff *skb)
 		 * the NET_RX_SOFTIRQ.  This is handled by netif_rx_ni().
 		 */
 		netif_rx_ni(skb);
-#ifdef CPTCFG_NV_CUSTOM_CAP
-	tegra_sysfs_histogram_tcpdump_rx(skb, __func__, __LINE__);
-#endif
 }
 
 static int brcmf_rx_hdrpull(struct brcmf_pub *drvr, struct sk_buff *skb,

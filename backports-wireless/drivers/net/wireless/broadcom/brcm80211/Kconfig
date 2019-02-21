@@ -161,3 +161,9 @@ config NV_CUSTOM_STATS
 	default y
 	---help---
 	  Enable stat support for Tegra platform.
+
+config NV_CUSTOM_ROAM_OFF
+	bool "For disabling roam by default for tegra platform"
+	default y
+	---help---
+	  Enable default roam off support for Tegra platform.

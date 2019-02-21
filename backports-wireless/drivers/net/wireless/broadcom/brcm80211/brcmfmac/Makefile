@@ -122,3 +122,8 @@ brcmfmac-$(CPTCFG_NV_CUSTOM_STATS) += \
 ccflags-y += \
 	-DCPTCFG_NV_CUSTOM_STATS
 endif
+
+ifneq ($(CPTCFG_NV_CUSTOM_ROAM_OFF),)
+ccflags-y += \
+	-DCPTCFG_NV_CUSTOM_ROAM_OFF
+endif

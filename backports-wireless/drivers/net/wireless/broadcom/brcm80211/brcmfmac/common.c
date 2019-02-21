@@ -83,7 +83,11 @@ static int brcmf_fcmode;
 module_param_named(fcmode, brcmf_fcmode, int, 0);
 MODULE_PARM_DESC(fcmode, "Mode of firmware signalled flow control");
 
+#ifdef CPTCFG_NV_CUSTOM_ROAM_OFF
+static int brcmf_roamoff = 1;
+#else
 static int brcmf_roamoff;
+#endif
 module_param_named(roamoff, brcmf_roamoff, int, S_IRUSR);
 MODULE_PARM_DESC(roamoff, "Do not use internal roaming engine");
 

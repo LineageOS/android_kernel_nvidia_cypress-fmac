@@ -28,6 +28,9 @@
 #include <brcmu_wifi.h>
 #include <linux/regulator/consumer.h>
 #include <defs.h>
+#ifdef CONFIG_COMPAT
+#include <linux/compat.h>
+#endif
 
 #include "core.h"
 #include "bus.h"
@@ -2037,10 +2040,25 @@ int brcmf_android_priv_cmd(struct net_device *ndev, struct ifreq *ifr, int cmd)
 	int bytes_written = 0;
 	struct brcmf_android_wifi_priv_cmd priv_cmd;
 
-	if (copy_from_user(&priv_cmd, ifr->ifr_data,
+#ifdef CONFIG_COMPAT
+	if (is_compat_task()) {
+		compat_brcmf_android_wifi_priv_cmd compat_priv_cmd;
+		if (copy_from_user(&compat_priv_cmd, ifr->ifr_data,
+			sizeof(compat_brcmf_android_wifi_priv_cmd))) {
+			ret = -EFAULT;
+			goto exit;
+		}
+		priv_cmd.buf = compat_ptr(compat_priv_cmd.buf);
+		priv_cmd.used_len = compat_priv_cmd.used_len;
+		priv_cmd.total_len = compat_priv_cmd.total_len;
+	} else
+#endif /* CONFIG_COMPAT */
+	{
+		if (copy_from_user(&priv_cmd, ifr->ifr_data,
 			   sizeof(struct brcmf_android_wifi_priv_cmd))) {
-		ret = -EFAULT;
-		goto exit;
+			ret = -EFAULT;
+			goto exit;
+		}
 	}
 
 	if (priv_cmd.total_len > PRIVATE_COMMAND_MAX_LEN ||

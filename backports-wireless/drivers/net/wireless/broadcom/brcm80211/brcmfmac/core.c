@@ -1547,6 +1547,13 @@ int brcmf_set_power(bool on, unsigned long msec)
 				regulator_disable(wifi_regulator);
 				return -EIO;
 			}
+#ifdef CPTCFG_BRCMFMAC_NV_GPIO
+			/* Power on GPIO */
+			if (tegra_toggle_gpio(true, msec) < 0) {
+				regulator_disable(wifi_regulator);
+				return -EIO;
+			}
+#endif /* CPTCFG_BRCMFMAC_NV_GPIO */
 			msleep(msec);
 #ifdef CPTCFG_BRCMFMAC_SDIO
 			wifi_card_detect(true);
@@ -1561,14 +1568,15 @@ int brcmf_set_power(bool on, unsigned long msec)
 #ifdef CPTCFG_BRCMFMAC_PCIE
 			brcmf_pcie_exit();
 #endif
+#ifdef CPTCFG_BRCMFMAC_NV_GPIO
+			/* Power off GPIO */
+			if (tegra_toggle_gpio(false, msec) < 0)
+				brcmf_err("Cannot disable gpio\n");
+#endif /* CPTCFG_BRCMFMAC_NV_GPIO */
 			if (regulator_disable(wifi_regulator))
 				brcmf_err("Cannot disable wifi regulator\n");
 		}
 	}
-
-#ifdef CPTCFG_BRCMFMAC_NV_GPIO
-	toggle_gpio(on, msec);
-#endif /* CPTCFG_BRCMFMAC_NV_GPIO */
 
 	return 0;
 }

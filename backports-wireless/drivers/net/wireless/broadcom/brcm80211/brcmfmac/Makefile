@@ -62,7 +62,7 @@ brcmfmac-$(CONFIG_OF) += \
 		of.o
 brcmfmac-$(CPTCFG_BRCMFMAC_ANDROID) += \
 		android.o \
-		nv_common.o
+		nv/nv_common.o
 
 ifneq ($(CPTCFG_NV_CUSTOM_SYSFS_TEGRA),)
 brcmfmac-$(CPTCFG_NV_CUSTOM_SYSFS_TEGRA) += \

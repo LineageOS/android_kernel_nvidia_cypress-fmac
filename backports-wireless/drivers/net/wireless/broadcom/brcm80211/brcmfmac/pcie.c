@@ -1,4 +1,5 @@
 /* Copyright (c) 2014 Broadcom Corporation
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -2052,7 +2053,11 @@ static const struct dev_pm_ops brcmf_pciedrvr_pm = {
 	BRCM_PCIE_VENDOR_ID_BROADCOM, dev_id,\
 	subvend, subdev, PCI_CLASS_NETWORK_OTHER << 8, 0xffff00, 0 }
 
+#ifdef CPTCFG_BRCMFMAC_NV_GPIO
+const struct pci_device_id brcmf_pcie_devid_table[] = {
+#else
 static const struct pci_device_id brcmf_pcie_devid_table[] = {
+#endif
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4350_DEVICE_ID),
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4354_RAW_DEVICE_ID),
 	BRCMF_PCIE_DEVICE_SUB(BRCM_PCIE_4355_DEVICE_ID,BRCM_PCIE_VENDOR_ID_BROADCOM,BRCM_PCIE_4355_DEVICE_ID),

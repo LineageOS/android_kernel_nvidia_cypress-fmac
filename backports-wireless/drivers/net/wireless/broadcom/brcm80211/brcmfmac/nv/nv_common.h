@@ -1,7 +1,7 @@
 /*
- * drivers/net/wireless/bcmdhd_pcie/dhd_custom_tegra.c
+ * nv_common.h
  *
- * Copyright (C) 2014-2018 NVIDIA Corporation. All rights reserved.
+ * Copyright (C) 2014-2019 NVIDIA Corporation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -25,8 +25,8 @@ int nv_btcoex_get_btcparams(struct net_device *dev, char *command, int total_len
 int nv_btcoex_set_btcparams(struct net_device *dev, char *command, int total_len);
 #endif /*CPTCFG_BRCMFMAC_NV_PRIV_CMD */
 #ifdef CPTCFG_BRCMFMAC_NV_GPIO
-void setup_gpio(struct platform_device *pdev, bool on);
-void toggle_gpio(bool on, unsigned long msec);
+void tegra_setup_gpio(struct platform_device *pdev, bool on);
+int tegra_toggle_gpio(bool on, unsigned long msec);
 #endif /* CPTCFG_BRCMFMAC_NV_GPIO */
 #ifdef CPTCFG_BRCMFMAC_NV_COUNTRY_CODE
 int wifi_platform_get_country_code_map(void);

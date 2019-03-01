@@ -167,3 +167,9 @@ config NV_CUSTOM_ROAM_OFF
 	default y
 	---help---
 	  Enable default roam off support for Tegra platform.
+
+config BRCMFMAC_NV_PRIV_CMD
+	bool "NV android private commands support"
+	default y
+	---help---
+	  Enable NV Android private commands support.

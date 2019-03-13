@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014 Broadcom Corporation
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,6 +30,10 @@
 #include "fwil.h"
 #include "android.h"
 
+#ifdef CPTCFG_BRCMFMAC_NV_PRIV_CMD
+#include "nv_android.h"
+#endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
+
 enum andr_vendor_subcmd {
 	GSCAN_SUBCMD_GET_CAPABILITIES = 0x1000,
 	GSCAN_SUBCMD_SET_CONFIG,
@@ -45,6 +50,28 @@ enum andr_vendor_subcmd {
 	ANDR_WIFI_RANDOM_MAC_OUI,
 	ANDR_WIFI_NODFS_CHANNELS,
 	ANDR_WIFI_SET_COUNTRY,
+#ifdef CPTCFG_BRCMFMAC_NV_PRIV_CMD
+	GSCAN_SUBCMD_SET_EPNO_SSID,
+	WIFI_SUBCMD_SET_SSID_WHITELIST,
+	WIFI_SUBCMD_SET_LAZY_ROAM_PARAMS,
+	WIFI_SUBCMD_ENABLE_LAZY_ROAM,
+	WIFI_SUBCMD_SET_BSSID_PREF,
+	WIFI_SUBCMD_SET_BSSID_BLACKLIST,
+	GSCAN_SUBCMD_ANQPO_CONFIG,
+	WIFI_SUBCMD_SET_RSSI_MONITOR,
+	RTT_SUBCMD_SET_CONFIG = 0x1100,
+	RTT_SUBCMD_CANCEL_CONFIG,
+	RTT_SUBCMD_GETCAPABILITY,
+	LSTATS_SUBCMD_GET_INFO = 0x1200,
+	DEBUG_START_LOGGING = 0x1400,
+	DEBUG_TRIGGER_MEM_DUMP,
+	DEBUG_GET_MEM_DUMP,
+	DEBUG_GET_VER,
+	DEBUG_GET_RING_STATUS,
+	DEBUG_GET_RING_DATA,
+	DEBUG_GET_FEATURE,
+	DEBUG_RESET_LOGGING,
+#endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
 	/* define all wifi calling related commands between 0x1600 and 0x16FF */
 	ANDR_OFFLOAD_SUBCMD_START_MKEEP_ALIVE = 0x1600,
 	ANDR_OFFLOAD_SUBCMD_STOP_MKEEP_ALIVE,
@@ -597,6 +624,80 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 			WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = brcmf_cfg80211_stop_mkeep_alive
 	},
+#ifdef CPTCFG_BRCMFMAC_NV_PRIV_CMD
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = ANDR_WIFI_RANDOM_MAC_OUI
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_set_pno_mac_oui
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_GET_VER
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_get_ver
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_START_LOGGING
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_TRIGGER_MEM_DUMP
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_GET_MEM_DUMP
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_GET_RING_STATUS
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_GET_RING_DATA
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_GET_FEATURE
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_RESET_LOGGING
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+#endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
 };
 
 void brcmf_set_vndr_cmd(struct wiphy *wiphy)

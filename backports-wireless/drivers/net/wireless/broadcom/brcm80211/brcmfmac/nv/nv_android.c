@@ -27,6 +27,8 @@
 #include "fwil.h"
 #include "nv_common.h"
 #include "nv_android.h"
+#include "pno.h"
+#include "vendor.h"
 
 #define CMD_RSSI		"RSSI"
 #define CMD_LINKSPEED		"LINKSPEED"
@@ -143,4 +145,94 @@ nv_android_private_cmd(struct brcmf_pub *drvr, struct net_device *ndev,
 	}
 
 	return ret;
+}
+
+int wl_cfgvendor_unsupported_feature(struct wiphy *wiphy,
+	struct wireless_dev *wdev, const void  *data, int len)
+{
+	// return unsupported error code
+	return WIFI_ERROR_NOT_SUPPORTED;
+}
+
+int wl_cfgvendor_get_ver(struct wiphy *wiphy,
+	struct wireless_dev *wdev, const void  *data, int len)
+{
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	struct brcmf_pub *drvr;
+	struct sk_buff *reply;
+	u8 buf[BRCMF_DCMD_SMLEN] = "n/a";
+	int type, ret;
+
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	if (!vif)
+		return -EINVAL;
+
+	ifp = vif->ifp;
+	if (!ifp)
+		return -EINVAL;
+
+	drvr = ifp->drvr;
+	if (!drvr)
+		return -EINVAL;
+
+	brcmf_android_wake_lock(ifp->drvr);
+	ret = WIFI_SUCCESS;
+	type = nla_type(data);
+	if (type == LOGGER_ATTRIBUTE_DRIVER_VER) {
+		/* get driver version */
+		if (drvr->revinfo.result == 0) {
+			memset(buf, 0, sizeof(buf));
+			brcmu_dotrev_str(drvr->revinfo.driverrev, buf);
+		}
+		brcmf_dbg(INFO, "Driver version = %s\n", buf);
+	} else if (type == LOGGER_ATTRIBUTE_FW_VER) {
+		/* query for 'ver' to get version info from firmware */
+		memset(buf, 0, sizeof(buf));
+		strncpy(buf, drvr->fwver, strlen(drvr->fwver));
+		brcmf_dbg(INFO, "Firmware version = %s\n", buf);
+	} else {
+		brcmf_err("Unsupported Loggler %d\n", type);
+		ret = WIFI_ERROR_NOT_SUPPORTED;
+		goto exit;
+	}
+
+	brcmf_dbg(INFO,"Type:%d ret buf:%s\n", type, buf);
+	reply = cfg80211_vendor_cmd_alloc_reply_skb(wiphy, strlen(buf));
+	nla_put(reply, type, strlen(buf), buf);
+	ret = cfg80211_vendor_cmd_reply(reply);
+
+exit:
+	brcmf_android_wake_unlock(ifp->drvr);
+	return ret;
+}
+
+int
+wl_cfgvendor_set_pno_mac_oui(struct wiphy *wiphy,
+	struct wireless_dev *wdev, const void  *data, int len)
+{
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	struct brcmf_pno_info *pi;
+	int type;
+
+	type = nla_type(data);
+	if (type != NV_ANDR_WIFI_ATTRIBUTE_RANDOM_MAC_OUI) {
+		return -1;
+	}
+
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	if (!vif)
+		return -EINVAL;
+
+	ifp = vif->ifp;
+	if (!ifp)
+		return -EINVAL;
+
+	pi = ifp_to_pno(ifp);
+	if (!pi)
+		return -EINVAL;
+	memcpy(&pi->pno_oui, nla_data(data), PNO_OUI_LEN);
+
+	return 0;
 }

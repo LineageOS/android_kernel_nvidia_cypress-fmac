@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016 Broadcom
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -36,17 +37,8 @@
 #define BRCMF_PNO_HIDDEN_BIT		2
 #define BRCMF_PNO_SCHED_SCAN_PERIOD	30
 
-#define BRCMF_PNO_MAX_BUCKETS		16
 #define GSCAN_BATCH_NO_THR_SET			101
 #define GSCAN_RETRY_THRESHOLD			3
-
-struct brcmf_pno_info {
-	int n_reqs;
-	struct cfg80211_sched_scan_request *reqs[BRCMF_PNO_MAX_BUCKETS];
-	struct mutex req_lock;
-};
-
-#define ifp_to_pno(_ifp)	((_ifp)->drvr->config->pno)
 
 static int brcmf_pno_store_request(struct brcmf_pno_info *pi,
 				   struct cfg80211_sched_scan_request *req)

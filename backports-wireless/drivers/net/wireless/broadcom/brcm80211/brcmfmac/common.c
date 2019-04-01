@@ -116,7 +116,7 @@ MODULE_PARM_DESC(ignore_probe_fail, "always succeed probe for debugging");
 
 static struct brcmfmac_platform_data *brcmfmac_pdata;
 struct brcmf_mp_global_t brcmf_mp_global;
-struct regulator *wifi_regulator;
+struct regulator *wifi_regulator = NULL;
 
 void brcmf_c_set_joinpref_default(struct brcmf_if *ifp)
 {
@@ -586,8 +586,9 @@ static int __init brcmf_common_pd_probe(struct platform_device *pdev)
 	} else {
 		if (!wifi_regulator) {
 			wifi_regulator = regulator_get(&pdev->dev, "wlreg_on");
-			if (!wifi_regulator) {
+			if (IS_ERR(wifi_regulator)) {
 				brcmf_err("cannot get wifi regulator\n");
+				wifi_regulator = NULL;
 				return -ENODEV;
 			}
 		}

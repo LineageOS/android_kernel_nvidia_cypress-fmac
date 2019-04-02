@@ -854,6 +854,11 @@ s32 brcmf_notify_escan_complete(struct brcmf_cfg80211_info *cfg,
 		struct cfg80211_scan_info info = {
 			.aborted = aborted,
 		};
+		if (scan_request->wiphy != cfg_to_wiphy(cfg)) {
+			brcmf_err("scan_request->wiphy:%p cfg wiphy:%p\n",
+				scan_request->wiphy, cfg_to_wiphy(cfg));
+			scan_request->wiphy = cfg_to_wiphy(cfg);
+		}
 #ifdef CPTCFG_NV_CUSTOM_SCAN
 		TEGRA_SCAN_DONE(scan_request, fw_abort)
 #endif

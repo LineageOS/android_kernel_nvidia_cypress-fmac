@@ -366,14 +366,6 @@ int wifi_platform_get_country_code_map(void)
 
 		ret = of_property_read_string(child, "custom_locale", &strptr);
 		if (ret) {
-		brcmf_err("read error iso_abbrev %s\n", child->name);
-			goto fail;
-		} else {
-			strncpy(country[i].country_abbrev, strptr, 3);
-		}
-
-		ret = of_property_read_string(child, "custom_locale", &strptr);
-		if (ret) {
 			brcmf_err("read error custom_locale %s\n", child->name);
 			goto fail;
 		} else {

@@ -1884,12 +1884,8 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 						    BRCMF_FW_REQ_NV_OPTIONAL,
 					  devinfo->fw_name, devinfo->nvram_name,
 					  brcmf_pcie_setup, domain_nr, bus_nr);
-	if (ret == 0) {
-#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
-		tegra_sysfs_bus_register(&pdev->dev);
-#endif
+	if (ret == 0)
 		return 0;
-	}
 fail_bus:
 #ifdef CPTCFG_BRCM_INSMOD_NO_FW
 	kfree(drvr);
@@ -1920,9 +1916,6 @@ brcmf_pcie_remove(struct pci_dev *pdev)
 	bus = dev_get_drvdata(&pdev->dev);
 	if (bus == NULL)
 		return;
-#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
-	tegra_sysfs_bus_unregister(&pdev->dev);
-#endif
 
 	devinfo = bus->bus_priv.pcie->devinfo;
 

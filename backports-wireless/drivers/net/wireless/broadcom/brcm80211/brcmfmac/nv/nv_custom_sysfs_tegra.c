@@ -166,6 +166,7 @@ tegra_sysfs_register(struct device *dev)
 #ifdef CPTCFG_NV_CUSTOM_STATS
 	tegra_sysfs_histogram_stat_work_start();
 #endif
+	tegra_sysfs_bus_register(dev);
 	goto exit;
 
 #ifdef CPTCFG_NV_CUSTOM_RF_TEST
@@ -209,6 +210,7 @@ tegra_sysfs_unregister(struct device *dev)
 #ifdef CPTCFG_BRCMFMAC_NV_IDS
 	dhdlog_sysfs_deinit(dev);
 #endif /* CPTCFG_BRCMFMAC_NV_IDS */
+	tegra_sysfs_bus_unregister(dev);
 }
 
 int tegra_sysfs_wifi_on;

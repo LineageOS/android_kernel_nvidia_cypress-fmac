@@ -240,6 +240,8 @@ int brcmf_android_set_miracast(struct net_device *ndev, char *command,
 
 	//TODO: Do we need to set mchan_algo & mchan_bw?
 	if (miracast_mode == MIRACAST_MODE_OFF) {
+		/* reset ampdu_mpdu */
+		miracast_off_ampdu_size = -1;
 		ret = brcmf_fil_iovar_int_set(ifp, "ampdu_mpdu",
 					      miracast_off_ampdu_size);
 	} else if (miracast_mode == MIRACAST_MODE_SOURCE ||

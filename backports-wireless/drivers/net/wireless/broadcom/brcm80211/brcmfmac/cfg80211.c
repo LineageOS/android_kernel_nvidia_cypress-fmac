@@ -5370,14 +5370,14 @@ brcmf_notify_tdls_peer_event(struct brcmf_if *ifp,
 {
 	switch (e->reason) {
 	case BRCMF_E_REASON_TDLS_PEER_DISCOVERED:
-		brcmf_dbg(TRACE, "TDLS Peer Discovered\n");
+		brcmf_info("TDLS Peer Discovered\n");
 		break;
 	case BRCMF_E_REASON_TDLS_PEER_CONNECTED:
-		brcmf_dbg(TRACE, "TDLS Peer Connected\n");
+		brcmf_info("TDLS Peer Connected\n");
 		brcmf_proto_add_tdls_peer(ifp->drvr, ifp->ifidx, (u8 *)e->addr);
 		break;
 	case BRCMF_E_REASON_TDLS_PEER_DISCONNECTED:
-		brcmf_dbg(TRACE, "TDLS Peer Disconnected\n");
+		brcmf_info("TDLS Peer Disconnected\n");
 		brcmf_proto_delete_peer(ifp->drvr, ifp->ifidx, (u8 *)e->addr);
 		break;
 	}
@@ -5391,12 +5391,15 @@ static int brcmf_convert_nl80211_tdls_oper(enum nl80211_tdls_operation oper)
 
 	switch (oper) {
 	case NL80211_TDLS_DISCOVERY_REQ:
+		brcmf_info("NL80211_TDLS_DISCOVERY_REQ");
 		ret = BRCMF_TDLS_MANUAL_EP_DISCOVERY;
 		break;
 	case NL80211_TDLS_SETUP:
+		brcmf_info("NL80211_TDLS_SETUP");
 		ret = BRCMF_TDLS_MANUAL_EP_CREATE;
 		break;
 	case NL80211_TDLS_TEARDOWN:
+		brcmf_info("NL80211_TDLS_SETUP");
 		ret = BRCMF_TDLS_MANUAL_EP_DELETE;
 		break;
 	default:

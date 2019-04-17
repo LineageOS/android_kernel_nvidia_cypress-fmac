@@ -1247,7 +1247,11 @@ void brcmf_detach(struct device *dev)
 
 	/* make sure primary interface removed last */
 	for (i = BRCMF_MAX_IFS - 1; i > -1; i--)
+#ifndef CPTCFG_BRCM_INSMOD_NO_FW
 		brcmf_remove_interface(drvr->iflist[i], false);
+#else
+		brcmf_remove_interface(drvr->iflist[i], true);
+#endif
 
 	brcmf_cfg80211_detach(drvr->config);
 

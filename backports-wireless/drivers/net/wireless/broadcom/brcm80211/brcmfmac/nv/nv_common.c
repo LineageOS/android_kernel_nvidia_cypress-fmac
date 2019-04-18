@@ -297,6 +297,8 @@ int nv_set_mac_address(struct net_device *ndev)
 		brcmf_err("No custom MAC address found, %d\n", err);
 		return err;
 	} else {
+		if (ifp->user_mac_set)
+			memcpy(ifp->mac_addr, ifp->ndev->dev_addr, ETH_ALEN);
 
 		brcmf_err("%s: setting mac %02x:%02x:%02x:%02x:%02x:%02x\n",
 			__func__,
@@ -315,7 +317,8 @@ int nv_set_mac_address(struct net_device *ndev)
 			return err;
 		} else {
 			brcmf_dbg(TRACE, "updated to %pM\n", ifp->mac_addr);
-			memcpy(ifp->ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
+			if (!ifp->user_mac_set)
+				memcpy(ifp->ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
 		}
 	}
 

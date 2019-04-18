@@ -218,17 +218,33 @@ static int brcmf_netdev_set_mac_address(struct net_device *ndev, void *addr)
 	struct brcmf_if *ifp = netdev_priv(ndev);
 	struct sockaddr *sa = (struct sockaddr *)addr;
 	int err;
+#ifdef CPTCFG_BRCM_INSMOD_NO_FW
+	struct brcmf_pub *drvr = ifp->drvr;
+	bool skip_fw_mac_set = false;
+
+	if ((ifp->bsscfgidx == 0)  && !(brcmf_android_wifi_is_on(drvr)))
+		skip_fw_mac_set = true;
+#endif
 
 	brcmf_dbg(TRACE, "Enter, bsscfgidx=%d\n", ifp->bsscfgidx);
 
+#ifdef CPTCFG_BRCM_INSMOD_NO_FW
+	if (!skip_fw_mac_set)
+		err = brcmf_fil_iovar_data_set(ifp, "cur_etheraddr", sa->sa_data,
+				       ETH_ALEN);
+	else
+		err = 0;
+#else
 	err = brcmf_fil_iovar_data_set(ifp, "cur_etheraddr", sa->sa_data,
 				       ETH_ALEN);
+#endif
 	if (err < 0) {
 		brcmf_err("Setting cur_etheraddr failed, %d\n", err);
 	} else {
 		brcmf_dbg(TRACE, "updated to %pM\n", sa->sa_data);
 		memcpy(ifp->mac_addr, sa->sa_data, ETH_ALEN);
 		memcpy(ifp->ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
+		ifp->user_mac_set = true;
 	}
 	return err;
 }
@@ -560,7 +576,8 @@ int brcmf_net_attach(struct brcmf_if *ifp, bool rtnl_locked)
 	ndev->ethtool_ops = &brcmf_ethtool_ops;
 
 	/* set the mac address & netns */
-	memcpy(ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
+	if (!ifp->user_mac_set)
+		memcpy(ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
 	dev_net_set(ndev, wiphy_net(cfg_to_wiphy(drvr->config)));
 
 	INIT_WORK(&ifp->multicast_work, _brcmf_set_multicast_list);
@@ -668,7 +685,8 @@ static int brcmf_net_p2p_attach(struct brcmf_if *ifp)
 	ndev->netdev_ops = &brcmf_netdev_ops_p2p;
 
 	/* set the mac address */
-	memcpy(ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
+	if (!ifp->user_mac_set)
+		memcpy(ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
 
 	if (register_netdev(ndev) != 0) {
 		brcmf_err("couldn't register the p2p net device\n");
@@ -748,6 +766,7 @@ struct brcmf_if *brcmf_add_if(struct brcmf_pub *drvr, s32 bsscfgidx, s32 ifidx,
 	init_waitqueue_head(&ifp->pend_8021x_wait);
 	spin_lock_init(&ifp->netif_stop_lock);
 
+	ifp->user_mac_set = false;
 	if (mac_addr != NULL)
 		memcpy(ifp->mac_addr, mac_addr, ETH_ALEN);
 
@@ -1143,7 +1162,8 @@ int brcmf_bus_started(struct device *dev)
 	}
 
 #ifdef CPTCFG_BRCM_INSMOD_NO_FW
-	memcpy(ifp->ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
+	if (!ifp->user_mac_set)
+		memcpy(ifp->ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
 #else
 	ret = brcmf_net_attach(ifp, false);
 #endif

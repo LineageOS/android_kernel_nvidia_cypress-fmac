@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2010 Broadcom Corporation
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -199,6 +200,7 @@ struct brcmf_if {
 	int ifidx;
 	s32 bsscfgidx;
 	u8 mac_addr[ETH_ALEN];
+	bool user_mac_set;
 	u8 netif_stop;
 	spinlock_t netif_stop_lock;
 	atomic_t pend_8021x_cnt;

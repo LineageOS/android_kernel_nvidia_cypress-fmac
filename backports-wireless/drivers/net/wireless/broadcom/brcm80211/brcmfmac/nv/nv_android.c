@@ -180,6 +180,10 @@ nv_android_private_cmd(struct brcmf_pub *drvr, struct net_device *ndev,
 	} else if (strncmp(command, CMD_RSSI, strlen(CMD_RSSI)) == 0) {
 		*bytes_written = wl_android_get_rssi(ifp, command, cmd_len);
 	} else if (strncmp(command, CMD_SETBAND, strlen(CMD_SETBAND)) == 0) {
+		struct brcmf_cfg80211_info *cfg;
+
+		cfg = wiphy_priv(wiphy);
+		brcmf_abort_scanning(cfg);
 		*bytes_written = wl_android_setband(ndev, wiphy, ifp, command);
 	} else if (strncmp(command, CMD_TEST_HANGEVENT,
 		   strlen(CMD_TEST_HANGEVENT)) == 0) {

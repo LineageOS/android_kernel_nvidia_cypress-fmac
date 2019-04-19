@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2010 Broadcom Corporation
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -110,6 +111,8 @@
 #define WL_WOWLAN_PKT_FILTER_ID_FIRST	201
 #define WL_WOWLAN_PKT_FILTER_ID_LAST	(WL_WOWLAN_PKT_FILTER_ID_FIRST + \
 					WL_WOWLAN_MAX_PATTERNS - 1)
+
+extern const struct ieee80211_regdomain brcmf_regdom;
 /**
  * enum brcmf_scan_status - scan engine status
  *

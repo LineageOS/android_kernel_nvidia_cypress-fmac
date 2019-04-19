@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2010 Broadcom Corporation
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -194,7 +195,7 @@ static const struct ieee80211_supported_band __wl_band_5ghz = {
  * operations on 5GHz channels. All the changes in world regulatory
  * domain are to be done here.
  */
-static const struct ieee80211_regdomain brcmf_regdom = {
+const struct ieee80211_regdomain brcmf_regdom = {
 	.n_reg_rules = 4,
 	.alpha2 =  "99",
 	.reg_rules = {

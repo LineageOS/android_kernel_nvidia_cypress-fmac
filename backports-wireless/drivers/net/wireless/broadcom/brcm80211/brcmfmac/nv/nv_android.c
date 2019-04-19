@@ -43,6 +43,7 @@
 #define CMD_SETBTCPARAMS	"SETBTCPARAMS"
 #define CMD_GETBTCPARAMS	"GETBTCPARAMS"
 #define CMD_MKEEP_ALIVE		"MKEEP_ALIVE" /* TODO */
+#define CMD_SETBAND		"SETBAND"
 u32 restrict_bw_20;
 bool builtin_roam_disabled;
 
@@ -84,6 +85,41 @@ static int wl_android_get_rssi(struct brcmf_if *ifp, char *command, int total_le
 	bytes_written = snprintf(command, total_len, "rssi %d", rssi);
 	brcmf_dbg(INFO, "%s: command result is %s\n", __func__, command);
 	return bytes_written;
+}
+
+static int wl_android_setband(struct net_device *ndev, struct wiphy *wiphy,
+			       struct brcmf_if *ifp, char *command)
+{
+	int err = -1;
+	uint band = *(command + strlen(CMD_SETBAND) + 1) - '0';
+	uint curr_band = 0;
+
+	brcmf_info("wl_android_setband: %d ", band);
+	if ((band == WLC_BAND_AUTO) || (band == WLC_BAND_5G) ||
+		(band == WLC_BAND_2G)) {
+		err = brcmf_fil_cmd_int_get(ifp, BRCMF_C_GET_BAND, &curr_band);
+		if (err) {
+			brcmf_err("%s: getband failed err: %d", __func__, err);
+			return err;
+		}
+		err = brcmf_fil_cmd_int_set(ifp, BRCMF_C_SET_BAND, band);
+		if (!err) {
+			err = brcmf_setup_wiphybands(wiphy);
+			if (!err)
+				wiphy_apply_custom_regulatory(wiphy, &brcmf_regdom);
+			else
+				brcmf_err("%s: setup wiphybands failed err: %d", __func__, err);
+		} else {
+			brcmf_err("%s: setband failed err: %d", __func__, err);
+			/* restore old band setting */
+			brcmf_fil_cmd_int_set(ifp, BRCMF_C_SET_BAND, curr_band);
+			return err;
+		}
+	} else {
+		err = -EINVAL;
+	}
+
+	return err;
 }
 
 int
@@ -140,6 +176,8 @@ nv_android_private_cmd(struct brcmf_pub *drvr, struct net_device *ndev,
 		*bytes_written = wl_android_get_link_speed(ifp, command, cmd_len);
 	} else if (strncmp(command, CMD_RSSI, strlen(CMD_RSSI)) == 0) {
 		*bytes_written = wl_android_get_rssi(ifp, command, cmd_len);
+	} else if (strncmp(command, CMD_SETBAND, strlen(CMD_SETBAND)) == 0) {
+		*bytes_written = wl_android_setband(ndev, wiphy, ifp, command);
 	} else {
 		return -EINVAL;
 	}

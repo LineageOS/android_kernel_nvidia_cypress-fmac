@@ -1299,8 +1299,6 @@ wifi_scan_request_done(struct cfg80211_scan_request *request, bool aborted)
 	}
 
 	if (original_scan_request) {
-		if (original_scan_request->wiphy != request->wiphy)
-			original_scan_request->wiphy = request->wiphy;
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(4, 7, 0))
 		info.aborted = false;
 		cfg80211_scan_done(original_scan_request, &info);

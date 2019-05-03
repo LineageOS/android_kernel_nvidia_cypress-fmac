@@ -917,14 +917,9 @@ int brcmf_cfg80211_del_iface(struct wiphy *wiphy, struct wireless_dev *wdev)
 	if (brcmf_cfg80211_vif_event_armed(cfg))
 		return -EBUSY;
 
-	if (ndev) {
-		if (test_bit(BRCMF_SCAN_STATUS_BUSY, &cfg->scan_status) &&
-		    cfg->escan_info.ifp == netdev_priv(ndev))
-			brcmf_notify_escan_complete(cfg, netdev_priv(ndev),
-						    true, true);
-
-		brcmf_fil_iovar_int_set(netdev_priv(ndev), "mpc", 1);
-	}
+	/* Abort pending scan on this wdev */
+	if (test_bit(BRCMF_SCAN_STATUS_BUSY, &cfg->scan_status))
+		brcmf_abort_scanning(cfg);
 
 	switch (wdev->iftype) {
 	case NL80211_IFTYPE_ADHOC:

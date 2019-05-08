@@ -24,6 +24,7 @@
 #include "fwil_types.h"
 #include "cfg80211.h"
 #include "pno.h"
+#include "feature.h"
 
 #define BRCMF_PNO_VERSION		2
 #define BRCMF_PNO_REPEAT		4
@@ -181,8 +182,7 @@ static int brcmf_pno_set_random(struct brcmf_if *ifp, struct brcmf_pno_info *pi)
 	/* Set locally administered */
 	pfn_mac.mac[0] |= 0x02;
 
-	brcmf_dbg(SCAN, "enabling random mac: reqid=%llu mac=%pM\n",
-		  pi->reqs[i]->reqid, pfn_mac.mac);
+	brcmf_dbg(SCAN, "enabling random mac: mac=%pM\n", pfn_mac.mac);
 	err = brcmf_fil_iovar_data_set(ifp, "pfn_macaddr", &pfn_mac,
 				       sizeof(pfn_mac));
 	if (err)
@@ -398,60 +398,62 @@ static int brcmf_pno_config_sched_scans(struct brcmf_if *ifp)
 	if (n_buckets < 0)
 		return n_buckets;
 
-	gsz = sizeof(*gscan_cfg) + (n_buckets - 1) * sizeof(*buckets);
-	gscan_cfg = kzalloc(gsz, GFP_KERNEL);
-	if (!gscan_cfg) {
-		err = -ENOMEM;
-		goto free_buckets;
-	}
-
 	/* clean up everything */
 	err = brcmf_pno_clean(ifp);
 	if  (err < 0) {
 		brcmf_err("failed error=%d\n", err);
-		goto free_gscan;
+		goto free_buckets;
 	}
 
 	/* configure pno */
 	err = brcmf_pno_config(ifp, scan_freq, 0, 0);
 	if (err < 0)
-		goto free_gscan;
+		goto free_buckets;
 
 	err = brcmf_pno_channel_config(ifp, &pno_cfg);
 	if (err < 0)
 		goto clean;
 
-	gscan_cfg->version = cpu_to_le16(BRCMF_GSCAN_CFG_VERSION);
-	gscan_cfg->retry_threshold = GSCAN_RETRY_THRESHOLD;
-	gscan_cfg->buffer_threshold = GSCAN_BATCH_NO_THR_SET;
-	gscan_cfg->flags = BRCMF_GSCAN_CFG_ALL_BUCKETS_IN_1ST_SCAN;
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_GSCAN)){
+		gsz = sizeof(*gscan_cfg) + (n_buckets - 1) * sizeof(*buckets);
+		gscan_cfg = kzalloc(gsz, GFP_KERNEL);
+		if (!gscan_cfg) {
+			err = -ENOMEM;
+			goto clean;
+		}
+		gscan_cfg->version = cpu_to_le16(BRCMF_GSCAN_CFG_VERSION);
+		gscan_cfg->retry_threshold = GSCAN_RETRY_THRESHOLD;
+		gscan_cfg->buffer_threshold = GSCAN_BATCH_NO_THR_SET;
+		gscan_cfg->flags = BRCMF_GSCAN_CFG_ALL_BUCKETS_IN_1ST_SCAN;
 
-	gscan_cfg->count_of_channel_buckets = n_buckets;
-	memcpy(&gscan_cfg->bucket[0], buckets,
-	       n_buckets * sizeof(*buckets));
+		gscan_cfg->count_of_channel_buckets = n_buckets;
+		memcpy(&gscan_cfg->bucket[0], buckets,
+			n_buckets * sizeof(*buckets));
 
-	err = brcmf_fil_iovar_data_set(ifp, "pfn_gscan_cfg", gscan_cfg, gsz);
+		err = brcmf_fil_iovar_data_set(ifp, "pfn_gscan_cfg", gscan_cfg, gsz);
 
-	if (err < 0)
-		goto clean;
+		if (err < 0)
+			goto free_gscan;
+	}
 
 	/* configure random mac */
 	err = brcmf_pno_set_random(ifp, pi);
 	if (err < 0)
-		goto clean;
+		goto free_gscan;
 
 	err = brcmf_pno_config_networks(ifp, pi);
 	if (err < 0)
-		goto clean;
+		goto free_gscan;
 
 	/* Enable the PNO */
 	err = brcmf_fil_iovar_int_set(ifp, "pfn", 1);
 
+free_gscan:
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_GSCAN))
+		kfree(gscan_cfg);
 clean:
 	if (err < 0)
 		brcmf_pno_clean(ifp);
-free_gscan:
-	kfree(gscan_cfg);
 free_buckets:
 	kfree(buckets);
 	return err;

@@ -7257,6 +7257,8 @@ static int brcmf_setup_wiphy(struct wiphy *wiphy, struct brcmf_if *ifp)
 	wiphy->mgmt_stypes = brcmf_txrx_stypes;
 	wiphy->max_remain_on_channel_duration = 5000;
 	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_PNO)) {
+		wiphy_ext_feature_set(wiphy,
+				NL80211_EXT_FEATURE_SCHED_SCAN_RELATIVE_RSSI);
 		gscan = brcmf_feat_is_enabled(ifp, BRCMF_FEAT_GSCAN);
 		brcmf_pno_wiphy_params(wiphy, gscan);
 	}

@@ -6996,11 +6996,15 @@ static int brcmf_setup_ifmodes(struct wiphy *wiphy, struct brcmf_if *ifp)
 	rsdb = brcmf_feat_is_enabled(ifp, BRCMF_FEAT_RSDB);
 
 #ifdef CPTCFG_BRCM_INSMOD_NO_FW
-	if (ifp->drvr->android->init_done)
-		return 0;
-
-	p2p = true;
-	mbss = true;
+	/*
+	 * Check and free old iface combinations, before allocating
+	 * new iface combinations.
+	 */
+	if (wiphy->iface_combinations) {
+		for (i = 0; i < wiphy->n_iface_combinations; i++)
+			kfree(wiphy->iface_combinations[i].limits);
+		kfree(wiphy->iface_combinations);
+	}
 #endif
 	n_combos = 1 + !!(p2p && !rsdb) + !!mbss;
 	combo = kcalloc(n_combos, sizeof(*combo), GFP_KERNEL);
@@ -7909,6 +7913,7 @@ int brcmf_cfg80211_register_if(struct brcmf_pub *drvr)
 		brcmf_err("Could not allocate wiphy device\n");
 		return -1;
 	}
+	wiphy->iface_combinations = NULL;
 	brcmf_setup_wiphy(wiphy, ifp);
 	wiphy->bands[NL80211_BAND_2GHZ] = &brcmf_def_band_2ghz;
 	drvr->android->wiphy = wiphy;

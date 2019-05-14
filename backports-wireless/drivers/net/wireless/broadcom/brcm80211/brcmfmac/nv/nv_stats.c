@@ -17,6 +17,7 @@
  */
 
 #include "nv_custom_sysfs_tegra.h"
+#include "dhd_custom_net_diag_tegra.h"
 
 extern int lp0_logs_enable;
 extern int bcmdhd_irq_number;
@@ -131,6 +132,12 @@ stat_work_func(struct work_struct *work)
 	wl_cnt_t *cnt;
 	int i;
 	struct timespec now;
+#ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
+	tegra_net_diag_data_t net_diag_data;
+	int bwValue;
+	int roundOffBw;
+#endif
+	get_monotonic_boottime(&now);
 
 	UNUSED_PARAMETER(dwork);
 
@@ -174,6 +181,33 @@ stat_work_func(struct work_struct *work)
 		bcmdhd_stat.time = now;
 		TEGRA_SYSFS_HISTOGRAM_AGGR_DRV_STATE(now);
 		TEGRA_SYSFS_HISTOGRAM_AGGR_PM_STATE(now);
+#ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
+		memset(&net_diag_data, 0, sizeof(tegra_net_diag_data_t));
+		tegra_net_diag_get_value(&net_diag_data);
+		bcmdhd_stat.driver_stat.cur_bw_est = net_diag_data.bw_est;
+		bwValue = net_diag_data.bw_est;
+		roundOffBw = 0;
+		if (bwValue < 1024) {
+			roundOffBw = (bwValue * 100) / 100;
+		} else if (bwValue < 1048576) {
+			roundOffBw = ((bwValue/1024) * 100) / 100;
+		} else if (bwValue < 1073741824) {
+			roundOffBw = ((bwValue/1048576) * 100) / 100;
+		} else {
+			roundOffBw = ((bwValue/1073741824) * 100) / 100;
+		}
+		if (roundOffBw <= 10) {
+			bcmdhd_stat.driver_stat.bw_est_level_0++;
+		} else if (roundOffBw <= 50) {
+			bcmdhd_stat.driver_stat.bw_est_level_1++;
+		} else if (roundOffBw <= 100) {
+			bcmdhd_stat.driver_stat.bw_est_level_2++;
+		} else if (roundOffBw <= 300) {
+			bcmdhd_stat.driver_stat.bw_est_level_3++;
+		} else if (roundOffBw > 300) {
+			bcmdhd_stat.driver_stat.bw_est_level_4++;
+		}
+#endif /* CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA */
 		memcpy(&bcmdhd_stat.fw_stat, cnt, sizeof(wl_cnt_t));
 		tcpdump_pkt_save(TCPDUMP_TAG_STAT,
 			netif,
@@ -206,21 +240,25 @@ tegra_sysfs_histogram_stat_show(struct device *dev,
 {
 	struct timespec now;
 	int i, n, comma;
-#ifdef CPTCFG_NV_CUSTOM_NET_BW_EST_TEGRA
+#ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
 	tegra_net_diag_data_t net_diag_data;
 #endif
 	get_monotonic_boottime(&now);
 	TEGRA_SYSFS_HISTOGRAM_AGGR_DRV_STATE(now);
 	TEGRA_SYSFS_HISTOGRAM_AGGR_PM_STATE(now);
-#ifdef CPTCFG_NV_CUSTOM_NET_BW_EST_TEGRA
+#ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
 	memset(&net_diag_data, 0, sizeof(tegra_net_diag_data_t));
 	tegra_net_diag_get_value(&net_diag_data);
-#endif /* CPTCFG_NV_CUSTOM_NET_BW_EST_TEGRA */
+#endif /* CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA */
 	/* print statistics head */
 	n = 0;
 	snprintf(buf + n, PAGE_SIZE - n,
 		"{\n"
+#ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
 		"\"version\": 3.2,\n"
+#else
+		"\"version\": 3,\n"
+#endif /* CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA */
 		"\"start_time\": %lu,\n"
 		"\"end_time\": %lu,\n"
 		"\"wifi_on_success\": %lu,\n"
@@ -377,7 +415,7 @@ tegra_sysfs_histogram_stat_show(struct device *dev,
 		"\"aggr_num_wowlan_multicast\": %lu,\n"
 		"\"aggr_num_wowlan_broadcast\": %lu,\n"
 		"\"aggr_bus_credit_unavail\": %lu,\n"
-#ifdef CPTCFG_NV_CUSTOM_NET_BW_EST_TEGRA
+#ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
 		"\"cur_bw_est\": %lu,\n"
 		"\"bw_est_level_0\": %lu,\n"
 		"\"bw_est_level_1\": %lu,\n"
@@ -386,7 +424,7 @@ tegra_sysfs_histogram_stat_show(struct device *dev,
 		"\"bw_est_level_4\": %lu,\n"
 		"\"cur_mode\": \"%s\",\n"
 		"\"cur_channel_width\": %d,\n"
-#endif /* CPTCFG_NV_CUSTOM_NET_BW_EST_TEGRA */
+#endif /* CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA */
 		"\"aggr_not_assoc_err\": %lu,\n"
 		"\"cur_country_code\": \"%s\"\n"
 		"}\n",
@@ -395,7 +433,7 @@ tegra_sysfs_histogram_stat_show(struct device *dev,
 		PRINT_DIFF(driver_stat.aggr_num_wowlan_multicast),
 		PRINT_DIFF(driver_stat.aggr_num_wowlan_broadcast),
 		PRINT_DIFF(driver_stat.aggr_bus_credit_unavail),
-#ifdef CPTCFG_NV_CUSTOM_NET_BW_EST_TEGRA
+#ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
 		net_diag_data.bw_est,
 		PRINT_DIFF(driver_stat.bw_est_level_0),
 		PRINT_DIFF(driver_stat.bw_est_level_1),
@@ -404,7 +442,7 @@ tegra_sysfs_histogram_stat_show(struct device *dev,
 		PRINT_DIFF(driver_stat.bw_est_level_4),
 		net_diag_data.assoc_mode,
 		net_diag_data.assoc_channel_width,
-#endif /* CPTCFG_NV_CUSTOM_NET_BW_EST_TEGRA */
+#endif /* CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA */
 		PRINT_DIFF(driver_stat.aggr_not_assoc_err),
 		bcmdhd_stat.fw_stat.cur_country_code);
 
@@ -432,11 +470,9 @@ tegra_sysfs_histogram_stat_store(struct device *dev,
 	} else if (strncmp(buf, "enable", 6) == 0) {
 		pr_info("%s: starting stat delayed work...\n", __func__);
 		tegra_sysfs_histogram_stat_work_start();
-		wifi_stat_debug = 1;
 	} else if (strncmp(buf, "disable", 7) == 0) {
 		pr_info("%s: stopping stat delayed work...\n", __func__);
 		tegra_sysfs_histogram_stat_work_stop();
-		wifi_stat_debug = 0;
 	} else if (strncmp(buf, "rate ", 5) == 0) {
 		err = kstrtouint(buf + 5, 0, &uint);
 		if (err < 0) {

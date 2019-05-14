@@ -302,14 +302,14 @@ typedef struct tegra_sysfs_stat_driver {
 	 * Use macros DRV_STAT_SET, SET_DRV_STAT
 	 * to modify flag.
      */
-#ifdef CPTCFG_NV_CUSTOM_NET_BW_EST_TEGRA
+#ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
 	unsigned long cur_bw_est; /* bps bw estimator*/
 	unsigned long bw_est_level_0;
 	unsigned long bw_est_level_1;
 	unsigned long bw_est_level_2;
 	unsigned long bw_est_level_3;
 	unsigned long bw_est_level_4;
-#endif /* CPTCFG_NV_CUSTOM_NET_BW_EST_TEGRA */
+#endif /* CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA */
 	unsigned long aggr_not_assoc_err;
 } tegra_sysfs_stat_driver_t;
 
@@ -337,9 +337,9 @@ extern int eapol_message_2_retry;
 extern int eapol_message_3_retry;
 extern int eapol_message_4_retry;
 
-#ifdef CPTCFG_NV_CUSTOM_NET_BW_EST_TEGRA
+#ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
 extern unsigned long tegra_net_bw_est_get_value(void);
-#endif /* CPTCFG_NV_CUSTOM_NET_BW_EST_TEGRA */
+#endif /* CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA */
 
 void tegra_sysfs_histogram_driver_stat_suspend(void);
 void tegra_sysfs_histogram_driver_stat_resume(void);

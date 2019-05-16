@@ -385,7 +385,7 @@ static int brcmf_pno_config_networks(struct brcmf_if *ifp,
 static int brcmf_pno_config_sched_scans(struct brcmf_if *ifp)
 {
 	struct brcmf_pno_info *pi;
-	struct brcmf_gscan_config *gscan_cfg;
+	struct brcmf_gscan_config *gscan_cfg = NULL;
 	struct brcmf_gscan_bucket_config *buckets;
 	struct brcmf_pno_config_le pno_cfg;
 	size_t gsz;

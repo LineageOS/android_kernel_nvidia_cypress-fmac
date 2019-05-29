@@ -7329,6 +7329,8 @@ static int brcmf_setup_wiphy(struct wiphy *wiphy, struct brcmf_if *ifp)
 	/* vendor commands/events support */
 	wiphy->vendor_commands = brcmf_vendor_cmds;
 	wiphy->n_vendor_commands = BRCMF_VNDR_CMDS_LAST - 1;
+	wiphy->vendor_events	= brcmf_vendor_events;
+	wiphy->n_vendor_events	= BRCMF_VNDR_EVENT_LAST - 1;
 
 #ifdef CPTCFG_BRCMFMAC_ANDROID
 	err = brcmf_android_set_extra_wiphy(wiphy, ifp);

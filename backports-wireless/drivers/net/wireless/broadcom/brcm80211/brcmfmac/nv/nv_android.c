@@ -44,6 +44,8 @@
 #define CMD_GETBTCPARAMS	"GETBTCPARAMS"
 #define CMD_MKEEP_ALIVE		"MKEEP_ALIVE" /* TODO */
 #define CMD_SETBAND		"SETBAND"
+#define CMD_TEST_HANGEVENT	"TEST_HANGEVENT"
+
 u32 restrict_bw_20;
 bool builtin_roam_disabled;
 
@@ -132,6 +134,7 @@ nv_android_private_cmd(struct brcmf_pub *drvr, struct net_device *ndev,
 	struct wiphy *wiphy = NULL;
 	int skip = 0;
 	int val;
+	u32 driver_status = 0;
 
 	if (!bytes_written)
 		return -EINVAL;
@@ -178,6 +181,11 @@ nv_android_private_cmd(struct brcmf_pub *drvr, struct net_device *ndev,
 		*bytes_written = wl_android_get_rssi(ifp, command, cmd_len);
 	} else if (strncmp(command, CMD_SETBAND, strlen(CMD_SETBAND)) == 0) {
 		*bytes_written = wl_android_setband(ndev, wiphy, ifp, command);
+	} else if (strncmp(command, CMD_TEST_HANGEVENT,
+		   strlen(CMD_TEST_HANGEVENT)) == 0) {
+		*bytes_written = brcmf_cfg80211_vndr_send_async_event(wiphy,
+			ndev, BRCM_VENDOR_EVENT_DRIVER_HANG, &driver_status,
+			sizeof(u32));
 	} else {
 		return -EINVAL;
 	}

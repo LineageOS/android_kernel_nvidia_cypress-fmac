@@ -174,6 +174,36 @@ enum mkeep_alive_attributes {
 /* Invalid Feature */
 #define WIFI_FEATURE_INVALID		0xFFFFFFFF
 
+
+/*
+ * This API is to be used for asynchronous vendor events. This
+ * shouldn't be used in response to a vendor command from its
+ * do_it handler context (instead wl_cfgvendor_send_cmd_reply should
+ * be used).
+ */
+int brcmf_cfg80211_vndr_send_async_event(struct wiphy *wiphy,
+	struct net_device *dev, int event_id, const void  *data, int len)
+{
+	u16 kflags;
+	struct sk_buff *skb;
+
+	kflags = in_atomic() ? GFP_ATOMIC : GFP_KERNEL;
+	skb = cfg80211_vendor_event_skb_alloc(dev, wiphy, len, event_id,
+					      kflags);
+	/* Alloc the SKB for vendor_event */
+	if (!skb) {
+		brcmf_err("%s: skb alloc failed", __func__);
+		return -ENOMEM;
+	}
+
+	/* Push the data to the skb */
+	nla_put_nohdr(skb, len, data);
+
+	cfg80211_vendor_event(skb, kflags);
+
+	return 0;
+}
+
 static int brcmf_cfg80211_vndr_cmds_dcmd_handler(struct wiphy *wiphy,
 						 struct wireless_dev *wdev,
 						 const void *data, int len)
@@ -700,8 +730,30 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 #endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
 };
 
+const struct  nl80211_vendor_cmd_info brcmf_vendor_events[] = {
+		{ BROADCOM_OUI, BRCM_VENDOR_EVENT_UNSPEC },
+		{ BROADCOM_OUI, BRCM_VENDOR_EVENT_PRIV_STR },
+		{ GOOGLE_OUI, GOOGLE_GSCAN_SIGNIFICANT_EVENT },
+		{ GOOGLE_OUI, GOOGLE_GSCAN_GEOFENCE_FOUND_EVENT },
+		{ GOOGLE_OUI, GOOGLE_GSCAN_BATCH_SCAN_EVENT },
+		{ GOOGLE_OUI, GOOGLE_SCAN_FULL_RESULTS_EVENT },
+		{ GOOGLE_OUI, GOOGLE_RTT_COMPLETE_EVENT },
+		{ GOOGLE_OUI, GOOGLE_SCAN_COMPLETE_EVENT },
+		{ GOOGLE_OUI, GOOGLE_GSCAN_GEOFENCE_LOST_EVENT },
+		{ GOOGLE_OUI, GOOGLE_SCAN_EPNO_EVENT },
+		{ GOOGLE_OUI, GOOGLE_DEBUG_RING_EVENT },
+		{ GOOGLE_OUI, GOOGLE_FW_DUMP_EVENT },
+		{ GOOGLE_OUI, GOOGLE_PNO_HOTSPOT_FOUND_EVENT },
+		{ GOOGLE_OUI, GOOGLE_RSSI_MONITOR_EVENT },
+		{ GOOGLE_OUI, GOOGLE_MKEEP_ALIVE_EVENT },
+		{ BROADCOM_OUI, BRCM_VENDOR_EVENT_IDSUP_STATUS },
+		{ BROADCOM_OUI, BRCM_VENDOR_EVENT_DRIVER_HANG }
+};
+
 void brcmf_set_vndr_cmd(struct wiphy *wiphy)
 {
 	wiphy->vendor_commands = brcmf_vendor_cmds;
 	wiphy->n_vendor_commands = ARRAY_SIZE(brcmf_vendor_cmds);
+	wiphy->vendor_events	= brcmf_vendor_events;
+	wiphy->n_vendor_events	= ARRAY_SIZE(brcmf_vendor_events);
 }

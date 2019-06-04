@@ -314,6 +314,10 @@ tegra_sysfs_histogram_tcpdump_rx(struct sk_buff *skb,
 	if (netif == NULL)
 		return;
 
+#ifdef CPTCFG_NV_DEBUG
+	nv_debug_skb(skb, netif, false);
+#endif
+
 	/* check if rx packet logging enabled */
 	if (skb->protocol == ETHER_TYPE_BRCM_REV && lp0_logs_enable == 0)
 		return;
@@ -351,6 +355,10 @@ tegra_sysfs_histogram_tcpdump_tx(struct sk_buff *skb,
 	netif = netdev->name;
 	if (netif == NULL)
 		return;
+
+#ifdef CPTCFG_NV_DEBUG
+	nv_debug_skb(skb, netif, true);
+#endif
 
 	/* check if tx packet logging enabled */
 	if (!pkt_tx_save)

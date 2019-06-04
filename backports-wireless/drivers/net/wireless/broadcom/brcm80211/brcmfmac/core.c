@@ -1738,15 +1738,15 @@ netdev_tx_t brcmf_android_netdev_start_xmit(struct sk_buff *skb,
 	netdev_tx_t ret;
 	struct brcmf_if *ifp = netdev_priv(ndev);
 
+#ifdef CPTCFG_NV_CUSTOM_CAP
+	tegra_sysfs_histogram_tcpdump_tx(skb, __func__, __LINE__);
+#endif
 	brcmf_android_wake_lock(ifp->drvr);
 
 	ret = brcmf_netdev_start_xmit(skb, ndev);
 
 	brcmf_android_wake_unlock(ifp->drvr);
 
-#ifdef CPTCFG_NV_CUSTOM_CAP
-	tegra_sysfs_histogram_tcpdump_tx(skb, __func__, __LINE__);
-#endif
 	return ret;
 }
 

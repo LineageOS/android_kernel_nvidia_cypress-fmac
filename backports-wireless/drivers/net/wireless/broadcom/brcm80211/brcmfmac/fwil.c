@@ -126,6 +126,9 @@ brcmf_fil_cmd_data(struct brcmf_if *ifp, u32 cmd, void *data, u32 len, bool set)
 	else
 		err = brcmf_proto_query_dcmd(drvr, ifp->ifidx, cmd, data, len);
 
+#ifdef CPTCFG_NV_DEBUG
+	nv_debug_cmd(ifp, cmd, data, len, set, err);
+#endif
 	if (err >= 0)
 		return 0;
 

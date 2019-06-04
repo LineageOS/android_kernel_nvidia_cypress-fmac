@@ -173,3 +173,10 @@ config BRCMFMAC_NV_PRIV_CMD
 	default y
 	---help---
 	  Enable NV Android private commands support.
+
+config NV_DEBUG
+	bool "Enable NV debug logs support for Tegra platform"
+	depends on NV_CUSTOM_CAP
+	default y
+	---help---
+	  Enable NV debug logs support for Tegra platform

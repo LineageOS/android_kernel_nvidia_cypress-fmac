@@ -133,3 +133,10 @@ ifneq ($(CPTCFG_NV_CUSTOM_ROAM_OFF),)
 ccflags-y += \
 	-DCPTCFG_NV_CUSTOM_ROAM_OFF
 endif
+
+ifneq ($(CPTCFG_NV_DEBUG),)
+brcmfmac-$(CPTCFG_NV_DEBUG) += \
+	nv/nv_debug.o
+ccflags-y += \
+	-DCPTCFG_NV_DEBUG
+endif

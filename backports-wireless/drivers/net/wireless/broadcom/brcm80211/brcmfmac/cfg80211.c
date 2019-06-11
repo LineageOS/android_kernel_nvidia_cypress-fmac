@@ -6453,7 +6453,7 @@ static void brcmf_deinit_priv_mem(struct brcmf_cfg80211_info *cfg)
 	cfg->wowl.nd = NULL;
 	kfree(cfg->wowl.nd_info);
 	cfg->wowl.nd_info = NULL;
-	kfree(cfg->escan_info.escan_buf);
+	vfree(cfg->escan_info.escan_buf);
 	cfg->escan_info.escan_buf = NULL;
 }
 
@@ -6473,7 +6473,7 @@ static s32 brcmf_init_priv_mem(struct brcmf_cfg80211_info *cfg)
 				    GFP_KERNEL);
 	if (!cfg->wowl.nd_info)
 		goto init_priv_mem_out;
-	cfg->escan_info.escan_buf = kzalloc(BRCMF_ESCAN_BUF_SIZE, GFP_KERNEL);
+	cfg->escan_info.escan_buf = vzalloc(BRCMF_ESCAN_BUF_SIZE);
 	if (!cfg->escan_info.escan_buf)
 		goto init_priv_mem_out;
 

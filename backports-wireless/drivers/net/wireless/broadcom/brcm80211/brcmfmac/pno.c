@@ -49,17 +49,13 @@ static int brcmf_pno_store_request(struct brcmf_pno_info *pi,
 		return -ENOSPC;
 
 	brcmf_dbg(SCAN, "reqid=%llu\n", req->reqid);
-	mutex_lock(&pi->req_lock);
 	pi->reqs[pi->n_reqs++] = req;
-	mutex_unlock(&pi->req_lock);
 	return 0;
 }
 
 static int brcmf_pno_remove_request(struct brcmf_pno_info *pi, u64 reqid)
 {
 	int i, err = 0;
-
-	mutex_lock(&pi->req_lock);
 
 	/* find request */
 	for (i = 0; i < pi->n_reqs; i++) {
@@ -86,7 +82,6 @@ static int brcmf_pno_remove_request(struct brcmf_pno_info *pi, u64 reqid)
 	}
 
 done:
-	mutex_unlock(&pi->req_lock);
 	return err;
 }
 
@@ -468,17 +463,23 @@ int brcmf_pno_start_sched_scan(struct brcmf_if *ifp,
 	brcmf_dbg(TRACE, "reqid=%llu\n", req->reqid);
 
 	pi = ifp_to_pno(ifp);
+
+	mutex_lock(&pi->req_lock);
 	ret = brcmf_pno_store_request(pi, req);
-	if (ret < 0)
+	if (ret < 0) {
+		mutex_unlock(&pi->req_lock);
 		return ret;
+	}
 
 	ret = brcmf_pno_config_sched_scans(ifp);
 	if (ret < 0) {
 		brcmf_pno_remove_request(pi, req->reqid);
 		if (pi->n_reqs)
 			(void)brcmf_pno_config_sched_scans(ifp);
+		mutex_unlock(&pi->req_lock);
 		return ret;
 	}
+	mutex_unlock(&pi->req_lock);
 	return 0;
 }
 
@@ -491,18 +492,23 @@ int brcmf_pno_stop_sched_scan(struct brcmf_if *ifp, u64 reqid)
 
 	pi = ifp_to_pno(ifp);
 
+	mutex_lock(&pi->req_lock);
 	/* No PNO reqeuset */
-	if (!pi->n_reqs)
+	if (!pi->n_reqs) {
+		mutex_unlock(&pi->req_lock);
 		return 0;
+	}
 
 	err = brcmf_pno_remove_request(pi, reqid);
-	if (err)
+	if (err) {
+		mutex_unlock(&pi->req_lock);
 		return err;
-
+	}
 	brcmf_pno_clean(ifp);
 
 	if (pi->n_reqs)
 		(void)brcmf_pno_config_sched_scans(ifp);
+	mutex_unlock(&pi->req_lock);
 
 	return 0;
 }
@@ -531,7 +537,9 @@ void brcmf_pno_detach(struct brcmf_cfg80211_info *cfg)
 		return;
 	cfg->pno = NULL;
 
+	mutex_lock(&pi->req_lock);
 	WARN_ON(pi->n_reqs);
+	mutex_unlock(&pi->req_lock);
 	mutex_destroy(&pi->req_lock);
 	kfree(pi);
 }

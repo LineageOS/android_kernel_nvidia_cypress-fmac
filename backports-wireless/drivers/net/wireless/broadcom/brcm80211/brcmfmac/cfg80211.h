@@ -158,6 +158,7 @@ enum brcmf_profile_fwsup {
  */
 struct brcmf_cfg80211_profile {
 	u8 bssid[ETH_ALEN];
+	struct brcmf_ssid_le ssid_le;	/* connected ssid */
 	struct brcmf_cfg80211_security sec;
 	struct brcmf_wsec_key key[BRCMF_MAX_DEFAULT_KEYS];
 	enum brcmf_profile_fwsup use_fwsup;

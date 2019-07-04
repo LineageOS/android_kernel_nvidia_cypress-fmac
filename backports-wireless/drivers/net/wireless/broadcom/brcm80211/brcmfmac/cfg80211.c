@@ -736,7 +736,10 @@ static s32 brcmf_notify_csa_complete_ind(struct brcmf_if *ifp,
 	enum nl80211_chan_width width = 0;
 	u32 chanspec;
 	int freq, err;
+	struct cfg80211_bss *bss = NULL;
+	struct brcmf_cfg80211_profile *profile = &ifp->vif->profile;
 
+	brcmf_dbg(TRACE, "Enter\n");
 	if (!ndev)
 		return -ENODEV;
 
@@ -745,6 +748,11 @@ static s32 brcmf_notify_csa_complete_ind(struct brcmf_if *ifp,
 		brcmf_err("chanspec failed (%d)\n", err);
 		return err;
 	}
+
+	/* Re-set existing country code to restore
+	 * DFS flags of all channels
+	 */
+	brcmf_android_reset_country(ifp->drvr);
 
 	ch.chspec = chanspec;
 	cfg->d11inf.decchspec(&ch);
@@ -791,6 +799,23 @@ static s32 brcmf_notify_csa_complete_ind(struct brcmf_if *ifp,
 	chandef.center_freq2 = 0;
 
 	cfg80211_ch_switch_notify(ndev, &chandef);
+
+	/* Update cfg80211 BSS Channel */
+	brcmf_dbg(INFO, "Get bss BSSID:%pM SSID:%s\n",
+			profile->bssid, profile->ssid_le.SSID);
+	bss = cfg80211_get_bss(wiphy, NULL,
+				profile->bssid,
+				profile->ssid_le.SSID,
+				profile->ssid_le.SSID_len,
+				IEEE80211_BSS_TYPE_ESS,
+				IEEE80211_PRIVACY_ANY);
+	if (bss) {
+		pr_info("Update BSSID:%pM to freq:%d on CSA notify\n",
+			profile->bssid, freq);
+		bss->channel = chandef.chan;
+		cfg80211_put_bss(wiphy, bss);
+	}
+
 	return 0;
 }
 
@@ -1577,7 +1602,10 @@ static int brcmf_set_sae_password(struct brcmf_if *ifp, const u8 *pwd_data,
 static void brcmf_link_down(struct brcmf_cfg80211_vif *vif, u16 reason)
 {
 	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(vif->wdev.wiphy);
+	struct wiphy *wiphy = cfg_to_wiphy(cfg);
 	s32 err = 0;
+	struct cfg80211_bss *bss = NULL;
+	struct brcmf_cfg80211_profile *profile = &vif->profile;
 
 	brcmf_dbg(TRACE, "Enter\n");
 
@@ -1590,6 +1618,21 @@ static void brcmf_link_down(struct brcmf_cfg80211_vif *vif, u16 reason)
 		}
 		if ((vif->wdev.iftype == NL80211_IFTYPE_STATION) ||
 		    (vif->wdev.iftype == NL80211_IFTYPE_P2P_CLIENT)) {
+
+			/* Explicitly calling unlink to remove BSS in CFG */
+			bss = cfg80211_get_bss(wiphy, NULL,
+						profile->bssid,
+						profile->ssid_le.SSID,
+						profile->ssid_le.SSID_len,
+						IEEE80211_BSS_TYPE_ESS,
+						IEEE80211_PRIVACY_ANY);
+			if (bss) {
+				brcmf_dbg(INFO, "Unlink BSSID:%pM SSID:%s\n",
+					profile->bssid, profile->ssid_le.SSID);
+				cfg80211_unlink_bss(wiphy, bss);
+				cfg80211_put_bss(wiphy, bss);
+			}
+
 			cfg80211_disconnected(vif->wdev.netdev, reason, NULL, 0,
 					      true, GFP_KERNEL);
 #ifdef CPTCFG_NV_CUSTOM_STATS
@@ -2206,7 +2249,7 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
 	struct brcmf_ext_join_params_le *ext_join_params;
 	u16 chanspec;
 	s32 err = 0;
-	u32 ssid_len;
+	u32 ssid_len = 0;
 
 	brcmf_dbg(TRACE, "Enter\n");
 	if (!check_vif_up(ifp->vif))
@@ -2415,8 +2458,12 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
 		brcmf_err("BRCMF_C_SET_SSID failed (%d)\n", err);
 
 done:
-	if (err)
+	if (err) {
 		clear_bit(BRCMF_VIF_STATUS_CONNECTING, &ifp->vif->sme_state);
+	} else {
+		memcpy(&profile->ssid_le.SSID, sme->ssid, ssid_len);
+		profile->ssid_le.SSID_len = cpu_to_le32(ssid_len);
+	}
 	brcmf_dbg(TRACE, "Exit\n");
 	return err;
 }

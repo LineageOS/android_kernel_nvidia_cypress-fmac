@@ -1,4 +1,5 @@
 /* Copyright (c) 2014 Broadcom Corporation
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -425,7 +426,9 @@ void brcmf_flowring_configure_addr_mode(struct brcmf_flowring *flow, int ifidx,
 		for (i = 0; i < ARRAY_SIZE(flow->hash); i++) {
 			if (flow->hash[i].ifidx == ifidx) {
 				flowid = flow->hash[i].flowid;
-				if (flow->rings[flowid]->status != RING_OPEN)
+				if (flow->rings[flowid] &&
+						flow->rings[flowid]->status
+						!= RING_OPEN)
 					continue;
 				flow->rings[flowid]->status = RING_CLOSING;
 				brcmf_msgbuf_delete_flowring(drvr, flowid);
@@ -466,7 +469,8 @@ void brcmf_flowring_delete_peer(struct brcmf_flowring *flow, int ifidx,
 		if ((sta || (memcmp(hash[i].mac, peer, ETH_ALEN) == 0)) &&
 		    (hash[i].ifidx == ifidx)) {
 			flowid = flow->hash[i].flowid;
-			if (flow->rings[flowid]->status == RING_OPEN) {
+			if (flow->rings[flowid] &&
+				flow->rings[flowid]->status == RING_OPEN) {
 				flow->rings[flowid]->status = RING_CLOSING;
 				brcmf_msgbuf_delete_flowring(drvr, flowid);
 			}

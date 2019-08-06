@@ -46,7 +46,7 @@ extern bool builtin_roam_disabled;
 
 /* brcmfmac PCIe devids */
 extern const struct pci_device_id brcmf_pcie_devid_table[];
-static struct pci_dev *tegra_get_pdev(void)
+struct pci_dev *tegra_get_pdev(void)
 {
 	struct pci_dev *found = NULL;
 	const struct pci_device_id *ids = brcmf_pcie_devid_table;

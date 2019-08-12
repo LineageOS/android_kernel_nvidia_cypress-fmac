@@ -283,6 +283,9 @@ struct brcmf_msgbuf_pktids {
 	struct brcmf_msgbuf_pktid *array;
 };
 
+struct brcmf_msgbuf_pktid g_tx_pktids[NR_TX_PKTIDS];
+struct brcmf_msgbuf_pktid g_rx_pktids[NR_RX_PKTIDS];
+
 static void brcmf_msgbuf_rxbuf_ioctlresp_post(struct brcmf_msgbuf *msgbuf);
 
 
@@ -290,19 +293,23 @@ static struct brcmf_msgbuf_pktids *
 brcmf_msgbuf_init_pktids(u32 nr_array_entries,
 			 enum dma_data_direction direction)
 {
-	struct brcmf_msgbuf_pktid *array;
 	struct brcmf_msgbuf_pktids *pktids;
-
-	array = kcalloc(nr_array_entries, sizeof(*array), GFP_KERNEL);
-	if (!array)
-		return NULL;
+	int i;
 
 	pktids = kzalloc(sizeof(*pktids), GFP_KERNEL);
 	if (!pktids) {
-		kfree(array);
 		return NULL;
 	}
-	pktids->array = array;
+
+	if (direction == DMA_TO_DEVICE) {
+		for (i = 0; i < NR_TX_PKTIDS; i++)
+			memset(&g_tx_pktids[i], 0, sizeof(g_tx_pktids[i]));
+		pktids->array = (struct brcmf_msgbuf_pktid *)&g_tx_pktids;
+	} else if (direction == DMA_FROM_DEVICE) {
+		for (i = 0; i < NR_RX_PKTIDS; i++)
+			memset(&g_rx_pktids[i], 0, sizeof(g_rx_pktids[i]));
+		pktids->array = (struct brcmf_msgbuf_pktid *)&g_rx_pktids;
+	}
 	pktids->array_size = nr_array_entries;
 
 	return pktids;
@@ -406,7 +413,6 @@ brcmf_msgbuf_release_array(struct device *dev,
 		count++;
 	} while (count < pktids->array_size);
 
-	kfree(array);
 	kfree(pktids);
 }
 

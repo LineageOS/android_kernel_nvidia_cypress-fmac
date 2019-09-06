@@ -3777,6 +3777,7 @@ brcmf_notify_sched_scan_results(struct brcmf_if *ifp,
 		goto free_req;
 
 out_err:
+	brcmf_pno_stop_sched_scan(ifp, 0);
 	cfg80211_sched_scan_stopped(wiphy, 0);
 free_req:
 	kfree(request);

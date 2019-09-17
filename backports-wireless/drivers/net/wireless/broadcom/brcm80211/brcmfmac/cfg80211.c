@@ -3449,8 +3449,8 @@ brcmf_compare_update_same_bss(struct brcmf_cfg80211_info *cfg,
 			*/
 			if (bss_info_rssi > bss_rssi)
 				bss->RSSI = bss_info_le->RSSI;
-		} else if ((bss->flags & BRCMF_BSS_RSSI_ON_CHANNEL) &&
-			(bss_info_le->flags & BRCMF_BSS_RSSI_ON_CHANNEL) == 0) {
+		} else if (!(bss->flags & BRCMF_BSS_RSSI_ON_CHANNEL) &&
+			(bss_info_le->flags & BRCMF_BSS_RSSI_ON_CHANNEL)) {
 			/* preserve the on-channel rssi measurement
 			* if the new measurement is off channel
 			*/

@@ -1404,6 +1404,8 @@ brcmf_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request)
 	struct net_device *ndev = cfg_to_ndev(cfg);
 	s32 err = 0;
 	u32 driver_status = 0;
+	u32 scansuppress_enabled = 0;
+	struct brcmf_if *ifp = netdev_priv(ndev);
 
 	brcmf_dbg(TRACE, "Enter\n");
 	vif = container_of(request->wdev, struct brcmf_cfg80211_vif, wdev);
@@ -1431,6 +1433,11 @@ brcmf_cfg80211_scan(struct wiphy *wiphy, struct cfg80211_scan_request *request)
 	err = brcmf_cfg80211_escan(wiphy, vif, request, NULL);
 
 	if (err) {
+		brcmf_fil_cmd_int_get(ifp, BRCMF_C_GET_SCANSUPPRESS,
+			&scansuppress_enabled);
+	}
+
+	if (err && !scansuppress_enabled) {
 		brcmf_err("scan error (%d)\n", err);
 		atomic_inc(&num_scan_failure);
 		if (atomic_read(&num_scan_failure) >= MAX_NUM_SCAN_FAILURE) {

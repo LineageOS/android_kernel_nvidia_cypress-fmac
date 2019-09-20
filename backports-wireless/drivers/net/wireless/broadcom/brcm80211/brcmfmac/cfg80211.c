@@ -3551,6 +3551,10 @@ brcmf_cfg80211_escan_handler(struct brcmf_if *ifp,
 			goto exit;
 		}
 
+		/* Ignore zero RSSI BSS info elements */
+		if (bss_info_le->RSSI == 0)
+			goto exit;
+
 		for (i = 0; i < list->count; i++) {
 			bss = bss ? (struct brcmf_bss_info_le *)
 				((unsigned char *)bss +

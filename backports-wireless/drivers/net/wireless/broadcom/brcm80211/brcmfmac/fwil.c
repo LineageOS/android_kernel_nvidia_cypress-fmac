@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2012 Broadcom Corporation
- * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
+ * Copyright (c) 2019-2020 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -112,12 +112,47 @@ brcmf_fil_cmd_data(struct brcmf_if *ifp, u32 cmd, void *data, u32 len, bool set)
 {
 	struct brcmf_pub *drvr = ifp->drvr;
 	s32 err;
+#ifdef CPTCFG_NV_CUSTOM_RF_TEST
+	int i;
+	uint value;
+	const char *param;
+	char *buff;
+#endif /* CPTCFG_NV_CUSTOM_RF_TEST */
 
 	if (drvr->bus_if->state != BRCMF_BUS_UP ||
 	    !drvr->proto) {
 		brcmf_err("bus is down. we have nothing to do.\n");
 		return -EIO;
 	}
+
+#ifdef CPTCFG_NV_CUSTOM_RF_TEST
+	/* Changing PM is not allowed while RF test is enabled */
+	if (atomic_read(&rf_test) && data != NULL) {
+		if (cmd == BRCMF_C_SET_PM) {
+			value = *(uint *)data;
+			if (set) {
+				atomic_set(&cur_power_mode, value);
+				brcmf_err("BRCMF_C_SET_PM: %d not allowed\n",
+					   value);
+				return 0;
+			}
+			TEGRA_SYSFS_HISTOGRAM_PM_STATE_UPDATE(value);
+		} else if (cmd == BRCMF_C_SET_VAR) {
+			for (i = 0; i < NUM_RF_TEST_PARAMS; i++) {
+				param = rf_test_params[i].var;
+				buff = (char *)data;
+				value = (uint)buff[strlen(param)+1];
+				if (strncmp(data, param, strlen(param)) == 0) {
+					atomic_set(&rf_test_params[i].cur_val,
+						   value);
+					brcmf_err("BRCMF_C_SET_VAR %s:%d not allowed\n",
+						   param, value);
+					return 0;
+				}
+			}
+		}
+	}
+#endif /* CPTCFG_NV_CUSTOM_RF_TEST */
 
 	if (data != NULL)
 		len = min_t(uint, len, BRCMF_DCMD_MAXLEN);

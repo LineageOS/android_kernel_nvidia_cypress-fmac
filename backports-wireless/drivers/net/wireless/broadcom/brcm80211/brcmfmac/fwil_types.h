@@ -30,7 +30,7 @@
 #define BRCMF_ARP_OL_PEER_AUTO_REPLY	0x00000008
 
 #define	BRCMF_BSS_INFO_VERSION	109 /* curr ver of brcmf_bss_info_le struct */
-#define BRCMF_BSS_RSSI_ON_CHANNEL	0x0002
+#define BRCMF_BSS_RSSI_ON_CHANNEL	0x0004
 
 #define BRCMF_STA_WME              0x00000002      /* WMM association */
 #define BRCMF_STA_AUTHE            0x00000008      /* Authenticated */
@@ -987,6 +987,23 @@ struct brcmf_gscan_config {
 	u8 retry_threshold;
 	__le16  lost_ap_window;
 	struct brcmf_gscan_bucket_config bucket[1];
+};
+
+#define KEEP_ALIVE_BUF_SIZE		512
+#define KEEP_ALIVE_FRAME_SIZE		300
+/* max size of IP packet for keep alive */
+#define MKEEP_ALIVE_IP_PKT_MAX		256
+#define MAX_KEEP_ALIVE_PKT_SIZE		64
+#define BRCMF_MKEEP_ALIVE_VERSION	1
+#define BRCMF_MKEEP_ALIVE_PRECISION	500
+#define BRCMF_MKEEP_ALIVE_FIXED_LEN	offsetof(struct brcmf_mkeep_alive_info, data)
+struct brcmf_mkeep_alive_info {
+        __le16 version; /* Version for mkeep_alive */
+        __le16 length; /* length of fixed parameters in the structure */
+        __le32 period_msec;
+        __le16 len_bytes;
+        u8 keep_alive_id; /* 0 - 3 for N = 4 */
+        u8 data[1];
 };
 
 #endif /* FWIL_TYPES_H_ */

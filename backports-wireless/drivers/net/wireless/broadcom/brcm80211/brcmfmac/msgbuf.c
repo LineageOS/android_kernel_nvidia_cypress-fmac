@@ -1,4 +1,5 @@
 /* Copyright (c) 2014 Broadcom Corporation
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -34,6 +35,9 @@
 #include "bus.h"
 #include "tracepoint.h"
 
+#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
+#include "nv_custom_sysfs_tegra.h"
+#endif /* CPTCFG_NV_CUSTOM_SYSFS_TEGRA */
 
 #define MSGBUF_IOCTL_RESP_TIMEOUT		msecs_to_jiffies(2000)
 
@@ -279,6 +283,9 @@ struct brcmf_msgbuf_pktids {
 	struct brcmf_msgbuf_pktid *array;
 };
 
+struct brcmf_msgbuf_pktid g_tx_pktids[NR_TX_PKTIDS];
+struct brcmf_msgbuf_pktid g_rx_pktids[NR_RX_PKTIDS];
+
 static void brcmf_msgbuf_rxbuf_ioctlresp_post(struct brcmf_msgbuf *msgbuf);
 
 
@@ -286,19 +293,23 @@ static struct brcmf_msgbuf_pktids *
 brcmf_msgbuf_init_pktids(u32 nr_array_entries,
 			 enum dma_data_direction direction)
 {
-	struct brcmf_msgbuf_pktid *array;
 	struct brcmf_msgbuf_pktids *pktids;
-
-	array = kcalloc(nr_array_entries, sizeof(*array), GFP_KERNEL);
-	if (!array)
-		return NULL;
+	int i;
 
 	pktids = kzalloc(sizeof(*pktids), GFP_KERNEL);
 	if (!pktids) {
-		kfree(array);
 		return NULL;
 	}
-	pktids->array = array;
+
+	if (direction == DMA_TO_DEVICE) {
+		for (i = 0; i < NR_TX_PKTIDS; i++)
+			memset(&g_tx_pktids[i], 0, sizeof(g_tx_pktids[i]));
+		pktids->array = (struct brcmf_msgbuf_pktid *)&g_tx_pktids;
+	} else if (direction == DMA_FROM_DEVICE) {
+		for (i = 0; i < NR_RX_PKTIDS; i++)
+			memset(&g_rx_pktids[i], 0, sizeof(g_rx_pktids[i]));
+		pktids->array = (struct brcmf_msgbuf_pktid *)&g_rx_pktids;
+	}
 	pktids->array_size = nr_array_entries;
 
 	return pktids;
@@ -330,7 +341,7 @@ brcmf_msgbuf_alloc_pktid(struct device *dev,
 	do {
 		(*idx)++;
 		if (*idx == pktids->array_size)
-			*idx = 0;
+			*idx = 1;
 		if (array[*idx].allocated.counter == 0)
 			if (atomic_cmpxchg(&array[*idx].allocated, 0, 1) == 0)
 				break;
@@ -372,6 +383,9 @@ brcmf_msgbuf_get_pktid(struct device *dev, struct brcmf_msgbuf_pktids *pktids,
 		return skb;
 	} else {
 		brcmf_err("Invalid packet id %d (not in use)\n", idx);
+#ifdef CPTCFG_NV_CUSTOM_STATS
+		TEGRA_SYSFS_HISTOGRAM_STAT_INC(sdio_tx_err);
+#endif
 	}
 
 	return NULL;
@@ -399,7 +413,6 @@ brcmf_msgbuf_release_array(struct device *dev,
 		count++;
 	} while (count < pktids->array_size);
 
-	kfree(array);
 	kfree(pktids);
 }
 
@@ -1112,7 +1125,7 @@ static void brcmf_msgbuf_process_event(struct brcmf_msgbuf *msgbuf, void *buf)
 
 	skb->protocol = eth_type_trans(skb, ifp->ndev);
 
-	brcmf_fweh_process_skb(ifp->drvr, skb);
+	brcmf_fweh_process_skb(ifp->drvr, skb, 0);
 
 exit:
 	brcmu_pkt_buf_free_skb(skb);

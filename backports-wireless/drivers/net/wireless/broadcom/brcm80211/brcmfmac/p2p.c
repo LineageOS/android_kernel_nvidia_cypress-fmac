@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2012 Broadcom Corporation
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,9 +30,9 @@
 #include "p2p.h"
 #include "cfg80211.h"
 #include "feature.h"
-#ifdef CPTCFG_NV_CUSTOM_SCAN
+#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
 #include "nv_custom_sysfs_tegra.h"
-#endif /* CPTCFG_NV_CUSTOM_SCAN */
+#endif /* CPTCFG_NV_CUSTOM_SYSFS_TEGRA */
 
 /* parameters used for p2p escan */
 #define P2PAPI_SCAN_NPROBES 1
@@ -53,6 +54,7 @@
 					 (channel == SOCIAL_CHAN_2) || \
 					 (channel == SOCIAL_CHAN_3))
 #define BRCMF_P2P_TEMP_CHAN	SOCIAL_CHAN_3
+#define BRCMF_P2P_TEMP_CHAN_5G	36
 #define SOCIAL_CHAN_CNT		3
 #define AF_PEER_SEARCH_CNT	2
 
@@ -1984,6 +1986,8 @@ static void brcmf_p2p_get_current_chanspec(struct brcmf_p2p_info *p2p,
 	struct brcmu_chan ch;
 	struct brcmf_bss_info_le *bi;
 	u8 *buf;
+	uint curr_band = 0;
+	int err = 0;
 
 	ifp = p2p->bss_idx[P2PAPI_BSSCFG_PRIMARY].vif->ifp;
 
@@ -2001,10 +2005,25 @@ static void brcmf_p2p_get_current_chanspec(struct brcmf_p2p_info *p2p,
 			}
 			kfree(buf);
 		}
+	} else {
+		err = brcmf_fil_cmd_int_get(ifp, BRCMF_C_GET_BAND, &curr_band);
+		if (unlikely(err)) {
+			brcmf_err("%s: get band failed", __func__);
+			/* Use default channel for P2P */
+			ch.chnum = BRCMF_P2P_TEMP_CHAN;
+			ch.bw = BRCMU_CHAN_BW_20;
+		}
+		if (curr_band == WLC_BAND_5G) {
+			/* Use 5GHz default channel for P2P */
+			ch.chnum = BRCMF_P2P_TEMP_CHAN_5G;
+			ch.bw = BRCMU_CHAN_BW_20;
+		} else {
+			/* Use default channel for P2P */
+			ch.chnum = BRCMF_P2P_TEMP_CHAN;
+			ch.bw = BRCMU_CHAN_BW_20;
+		}
 	}
-	/* Use default channel for P2P */
-	ch.chnum = BRCMF_P2P_TEMP_CHAN;
-	ch.bw = BRCMU_CHAN_BW_20;
+
 	p2p->cfg->d11inf.encchspec(&ch);
 	*chanspec = ch.chspec;
 }
@@ -2314,6 +2333,9 @@ struct wireless_dev *brcmf_p2p_add_vif(struct wiphy *wiphy, const char *name,
 		/* set station timeout for p2p */
 		brcmf_fil_cmd_int_set(ifp, BRCMF_C_SET_SCB_TIMEOUT,
 				      BRCMF_SCB_TIMEOUT_VALUE);
+#ifdef CPTCFG_NV_CUSTOM_STATS
+		TEGRA_SYSFS_HISTOGRAM_STAT_INC(ago_start);
+#endif
 	}
 	return &ifp->vif->wdev;
 

@@ -1,5 +1,7 @@
 /*
  * Copyright 2017, Cypress Semiconductor Corporation or a subsidiary of
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
+ *
  * Cypress Semiconductor Corporation. All rights reserved.
  * This software, including source code, documentation and related
  * materials ("Software"), is owned by Cypress Semiconductor
@@ -30,6 +32,9 @@
  */
 #include <linux/mmc/card.h>
 #include <linux/wakelock.h>
+#include <linux/pci-aspm.h>
+#include <linux/pci.h>
+
 #include <defs.h>
 #include <brcmu_utils.h>
 #include <brcmu_wifi.h>
@@ -40,9 +45,10 @@
 #include "sdio.h"
 #include "fwil.h"
 #include "vendor.h"
+#include "nv_common.h"
 
 #ifdef CPTCFG_BRCMFMAC_NV_PRIV_CMD
-#include "nv_common.h"
+#include "nv_android.h"
 #endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
 
 #define CMD_START		"START"
@@ -72,20 +78,6 @@
 #ifdef CPTCFG_BRCMFMAC_NV_COUNTRY_CODE
 #define CMD_NV_COUNTRY		"NV_COUNTRY"
 #endif /* CPTCFG_BRCMFMAC_NV_COUNTRY_CODE */
-#ifdef CPTCFG_BRCMFMAC_NV_PRIV_CMD
-#define CMD_SET_IM_MODE		"SETMIRACAST"
-#define CMD_UPDATE_CHANNEL_LIST "UPDATE_CHANNEL_LIST"
-#define CMD_RESTRICT_BW_20      "RESTRICT_BW_20"
-#define CMD_MAXLINKSPEED	"MAXLINKSPEED"
-#define CMD_SETROAMMODE		"SETROAMMODE"
-#define CMD_AUTOSLEEP		"AUTOSLEEP" /* only for SDIO based chip */
-#define CMD_SET_WPS_P2PIE    	"SET_AP_WPS_P2P_IE"
-#define CMD_SETBTCPARAMS	"SETBTCPARAMS"
-#define CMD_GETBTCPARAMS	"GETBTCPARAMS"
-#define CMD_MKEEP_ALIVE		"MKEEP_ALIVE" /* TODO */
-u32 restrict_bw_20;
-bool builtin_roam_disabled;
-#endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
 
 #define DEFAULT_WIFI_TURNON_DELAY	200
 
@@ -153,7 +145,7 @@ static int brcmf_android_set_suspendmode(struct net_device *ndev,
 					 char *command, int total_len)
 {
 	int ret = 0;
-
+	struct pci_dev *pdev = NULL;
 #if !defined(CONFIG_HAS_EARLYSUSPEND)
 	int suspend_flag;
 
@@ -162,6 +154,15 @@ static int brcmf_android_set_suspendmode(struct net_device *ndev,
 	suspend_flag = *(command + strlen(CMD_SETSUSPENDMODE) + 1) - '0';
 	if (suspend_flag != 0 && suspend_flag != 1)
 		return -EINVAL;
+
+	pdev = tegra_get_pdev();
+	if (pdev) {
+		if (suspend_flag == 1)
+			pci_enable_link_state(pdev, PCIE_LINK_STATE_L1);
+		else
+			pci_disable_link_state(pdev, PCIE_LINK_STATE_L1);
+	} else
+		brcmf_info("%s pci_dev is null", __func__);
 
 	ret = brcmf_pktfilter_enable(ndev, (bool)suspend_flag);
 	if (ret)
@@ -202,10 +203,13 @@ int brcmf_android_set_btcoexmode(struct net_device *ndev, char *command,
 
 	btcoex_mode = *(command + strlen(CMD_BTCOEXMODE) + 1) - '0';
 
-	if (btcoex_mode == 1) {
+	if (btcoex_mode == 0) {
 		ret = brcmf_crit_proto_start(ndev);
-	} else if (btcoex_mode == 2) {
+	} else if (btcoex_mode == 1) {
 		ret = brcmf_crit_proto_stop(ndev);
+	} else if (btcoex_mode == 2) {
+		// TODO: Implement SENSE mode
+		ret = 0;
 	} else {
 		brcmf_err("unknown btcode mode(%d)\n", btcoex_mode);
 		ret = -EINVAL;
@@ -251,6 +255,8 @@ int brcmf_android_set_miracast(struct net_device *ndev, char *command,
 
 	//TODO: Do we need to set mchan_algo & mchan_bw?
 	if (miracast_mode == MIRACAST_MODE_OFF) {
+		/* reset ampdu_mpdu */
+		miracast_off_ampdu_size = -1;
 		ret = brcmf_fil_iovar_int_set(ifp, "ampdu_mpdu",
 					      miracast_off_ampdu_size);
 	} else if (miracast_mode == MIRACAST_MODE_SOURCE ||
@@ -274,16 +280,9 @@ brcmf_handle_private_cmd(struct brcmf_pub *drvr, struct net_device *ndev,
 	int bytes_written = 0;
 	struct brcmf_android *android = drvr->android;
 	struct brcmf_android_wifi_priv_cmd priv_cmd;
-	struct brcmf_if *ifp = netdev_priv(ndev);
-	struct wireless_dev *wdev = ndev->ieee80211_ptr;
-	struct wiphy *wiphy = NULL;
-	int skip = 0;
-#ifdef CPTCFG_BRCMFMAC_NV_PRIV_CMD
-	int val;
-#endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
 
 	brcmf_dbg(ANDROID, "enter\n");
-	brcmf_err("command = %s received\n", command);
+
 	if (!android) {
 		brcmf_err("not supported\n");
 		return -EOPNOTSUPP;
@@ -293,9 +292,6 @@ brcmf_handle_private_cmd(struct brcmf_pub *drvr, struct net_device *ndev,
 		brcmf_err("ignore cmd \"%s\" - iface is down\n", command);
 		return 0;
 	}
-	if (!wdev)
-		return -ENODEV;
-	wiphy = wdev->wiphy;
 
 	memset(&priv_cmd, 0, sizeof(struct brcmf_android_wifi_priv_cmd));
 	priv_cmd.total_len = cmd_len;
@@ -345,12 +341,6 @@ brcmf_handle_private_cmd(struct brcmf_pub *drvr, struct net_device *ndev,
 		bytes_written =
 		    brcmf_android_set_miracast(ndev, command,
 					       priv_cmd.total_len);
-	} else if (strncmp(command, CMD_SET_WPS_P2PIE,
-		   strlen(CMD_SET_WPS_P2PIE)) == 0) {
-		skip = strlen(CMD_SET_WPS_P2PIE) + 3;
-		bytes_written =
-			brcmf_cfg80211_set_ap_wps_p2p_ie(ifp->vif, command + skip,
-						(priv_cmd.total_len - skip), *(command + skip - 2) - '0');
 	} else if (strncmp(command, CMD_BTCOEXSCAN_START,
 		   strlen(CMD_BTCOEXSCAN_START)) == 0) {
 		//TODO: Handle BTCOEXSCAN_START command
@@ -358,32 +348,9 @@ brcmf_handle_private_cmd(struct brcmf_pub *drvr, struct net_device *ndev,
 		   strlen(CMD_BTCOEXSCAN_STOP)) == 0) {
 		//TODO: Handle BTCOEXSCAN_STOP command
 #ifdef CPTCFG_BRCMFMAC_NV_PRIV_CMD
-	} else if (strncmp(command, CMD_SET_IM_MODE,
-			strlen(CMD_SET_IM_MODE)) == 0) {
-		bytes_written =
-			nv_brcmf_android_set_im_mode(drvr, ndev, command,
-						priv_cmd.total_len);
-	} else if (strncmp(command, CMD_UPDATE_CHANNEL_LIST,
-			strlen(CMD_UPDATE_CHANNEL_LIST)) == 0) {
-		brcmf_setup_wiphybands(wiphy);
-	} else if (strncmp(command, CMD_RESTRICT_BW_20, strlen(CMD_GETBAND)) == 0) {
-		bytes_written = -1;
-		val = *(command + strlen(CMD_RESTRICT_BW_20) + 1) - '0';
-		if (val == 0 || val == 1) {
-			restrict_bw_20 = val;
-			bytes_written = 0;
-		}
-	} else if (strncmp(command, CMD_MAXLINKSPEED, strlen(CMD_MAXLINKSPEED))== 0) {
-		bytes_written = brcmf_get_max_linkspeed(ndev, command, priv_cmd.total_len);
-	} else if (!builtin_roam_disabled && strncmp(command, CMD_SETROAMMODE, strlen(CMD_SETROAMMODE)) == 0) {
-		 bytes_written = nv_set_roam_mode(ndev, command, priv_cmd.total_len);
-	} else if (strncmp(command, CMD_SETBTCPARAMS, strlen(CMD_SETBTCPARAMS)) == 0) {
-		bytes_written = nv_btcoex_set_btcparams(ndev, command, priv_cmd.total_len);
-	} else if (strncmp(command, CMD_GETBTCPARAMS, strlen(CMD_GETBTCPARAMS)) == 0) {
-		bytes_written = nv_btcoex_get_btcparams(ndev, command, priv_cmd.total_len);
-	} else if (strncmp(command, CMD_MKEEP_ALIVE,
-		strlen(CMD_MKEEP_ALIVE)) == 0) {
-		brcmf_err("CMD_MKEEP_ALIVE not supported\n");
+	} else if (nv_android_private_cmd(drvr, ndev,
+		  command, cmd_len, &bytes_written) > 0) {
+		//Handled NV Private command
 #endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
 	} else {
 		brcmf_err("unknown PRIVATE command %s - ignored\n", command);

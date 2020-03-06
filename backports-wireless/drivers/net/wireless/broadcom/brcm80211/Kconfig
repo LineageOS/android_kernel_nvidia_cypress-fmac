@@ -154,3 +154,29 @@ config NV_CUSTOM_RF_TEST
 	default y
 	---help---
 	  Enable RF test support for Tegra platform.
+
+config NV_CUSTOM_STATS
+	bool "Stat support for Tegra platform"
+	depends on NV_CUSTOM_SYSFS_TEGRA
+	default y
+	---help---
+	  Enable stat support for Tegra platform.
+
+config NV_CUSTOM_ROAM_OFF
+	bool "For disabling roam by default for tegra platform"
+	default y
+	---help---
+	  Enable default roam off support for Tegra platform.
+
+config BRCMFMAC_NV_PRIV_CMD
+	bool "NV android private commands support"
+	default y
+	---help---
+	  Enable NV Android private commands support.
+
+config NV_DEBUG
+	bool "Enable NV debug logs support for Tegra platform"
+	depends on NV_CUSTOM_CAP
+	default y
+	---help---
+	  Enable NV debug logs support for Tegra platform

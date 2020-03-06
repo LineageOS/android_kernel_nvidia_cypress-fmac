@@ -23,8 +23,7 @@ ccflags-y += \
 	-DCPTCFG_BRCMFMAC_NV_GPIO \
 	-DCPTCFG_BRCMFMAC_NV_CUSTOM_MAC \
 	-DCPTCFG_BRCMFMAC_NV_CUSTOM_FILES \
-	-DCPTCFG_BRCMFMAC_NV_COUNTRY_CODE \
-	-DCPTCFG_BRCMFMAC_NV_PRIV_CMD
+	-DCPTCFG_BRCMFMAC_NV_COUNTRY_CODE
 
 obj-$(CPTCFG_BRCMFMAC) += brcmfmac.o
 brcmfmac-objs += \
@@ -63,7 +62,7 @@ brcmfmac-$(CONFIG_OF) += \
 		of.o
 brcmfmac-$(CPTCFG_BRCMFMAC_ANDROID) += \
 		android.o \
-		nv_common.o
+		nv/nv_common.o
 
 ifneq ($(CPTCFG_NV_CUSTOM_SYSFS_TEGRA),)
 brcmfmac-$(CPTCFG_NV_CUSTOM_SYSFS_TEGRA) += \
@@ -114,4 +113,30 @@ brcmfmac-$(CPTCFG_NV_CUSTOM_RF_TEST) += \
 	nv/nv_rf_test.o
 ccflags-y += \
 	-DCPTCFG_NV_CUSTOM_RF_TEST
+endif
+
+ifneq ($(CPTCFG_NV_CUSTOM_STATS),)
+brcmfmac-$(CPTCFG_NV_CUSTOM_STATS) += \
+	nv/nv_stats.o
+ccflags-y += \
+	-DCPTCFG_NV_CUSTOM_STATS
+endif
+
+ifneq ($(CPTCFG_BRCMFMAC_NV_PRIV_CMD),)
+brcmfmac-$(CPTCFG_BRCMFMAC_NV_PRIV_CMD) += \
+	nv/nv_android.o
+ccflags-y += \
+	-DCPTCFG_BRCMFMAC_NV_PRIV_CMD
+endif
+
+ifneq ($(CPTCFG_NV_CUSTOM_ROAM_OFF),)
+ccflags-y += \
+	-DCPTCFG_NV_CUSTOM_ROAM_OFF
+endif
+
+ifneq ($(CPTCFG_NV_DEBUG),)
+brcmfmac-$(CPTCFG_NV_DEBUG) += \
+	nv/nv_debug.o
+ccflags-y += \
+	-DCPTCFG_NV_DEBUG
 endif

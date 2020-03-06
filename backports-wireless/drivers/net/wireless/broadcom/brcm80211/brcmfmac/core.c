@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2010 Broadcom Corporation
- * Copyright (C) 2018 NVIDIA Corporation. All rights reserved.
+ * Copyright (C) 2018-2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -28,6 +28,9 @@
 #include <brcmu_wifi.h>
 #include <linux/regulator/consumer.h>
 #include <defs.h>
+#ifdef CONFIG_COMPAT
+#include <linux/compat.h>
+#endif
 
 #include "core.h"
 #include "bus.h"
@@ -215,17 +218,33 @@ static int brcmf_netdev_set_mac_address(struct net_device *ndev, void *addr)
 	struct brcmf_if *ifp = netdev_priv(ndev);
 	struct sockaddr *sa = (struct sockaddr *)addr;
 	int err;
+#ifdef CPTCFG_BRCM_INSMOD_NO_FW
+	struct brcmf_pub *drvr = ifp->drvr;
+	bool skip_fw_mac_set = false;
+
+	if ((ifp->bsscfgidx == 0)  && !(brcmf_android_wifi_is_on(drvr)))
+		skip_fw_mac_set = true;
+#endif
 
 	brcmf_dbg(TRACE, "Enter, bsscfgidx=%d\n", ifp->bsscfgidx);
 
+#ifdef CPTCFG_BRCM_INSMOD_NO_FW
+	if (!skip_fw_mac_set)
+		err = brcmf_fil_iovar_data_set(ifp, "cur_etheraddr", sa->sa_data,
+				       ETH_ALEN);
+	else
+		err = 0;
+#else
 	err = brcmf_fil_iovar_data_set(ifp, "cur_etheraddr", sa->sa_data,
 				       ETH_ALEN);
+#endif
 	if (err < 0) {
 		brcmf_err("Setting cur_etheraddr failed, %d\n", err);
 	} else {
 		brcmf_dbg(TRACE, "updated to %pM\n", sa->sa_data);
 		memcpy(ifp->mac_addr, sa->sa_data, ETH_ALEN);
 		memcpy(ifp->ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
+		ifp->user_mac_set = true;
 	}
 	return err;
 }
@@ -343,6 +362,13 @@ void brcmf_netif_rx(struct brcmf_if *ifp, struct sk_buff *skb)
 	ifp->ndev->stats.rx_bytes += skb->len;
 	ifp->ndev->stats.rx_packets++;
 
+#ifdef CPTCFG_NV_CUSTOM_CAP
+	/* capture packet histograms before calling netif rx */
+	tegra_sysfs_histogram_tcpdump_rx(skb, __func__, __LINE__);
+#endif
+#ifdef CPTCFG_NV_CUSTOM_STATS
+	TEGRA_SYSFS_HISTOGRAM_WAKE_CNT_INC(skb);
+#endif
 	brcmf_dbg(DATA, "rx proto=0x%X\n", ntohs(skb->protocol));
 	if (in_interrupt())
 		netif_rx(skb);
@@ -352,9 +378,6 @@ void brcmf_netif_rx(struct brcmf_if *ifp, struct sk_buff *skb)
 		 * the NET_RX_SOFTIRQ.  This is handled by netif_rx_ni().
 		 */
 		netif_rx_ni(skb);
-#ifdef CPTCFG_NV_CUSTOM_CAP
-	tegra_sysfs_histogram_tcpdump_rx(skb, __func__, __LINE__);
-#endif
 }
 
 static int brcmf_rx_hdrpull(struct brcmf_pub *drvr, struct sk_buff *skb,
@@ -392,7 +415,8 @@ void brcmf_rx_frame(struct device *dev, struct sk_buff *skb, bool handle_event)
 	} else {
 		/* Process special event packets */
 		if (handle_event)
-			brcmf_fweh_process_skb(ifp->drvr, skb);
+			brcmf_fweh_process_skb(ifp->drvr, skb,
+					       BCMILCP_SUBTYPE_VENDOR_LONG);
 
 		brcmf_netif_rx(ifp, skb);
 	}
@@ -409,7 +433,7 @@ void brcmf_rx_event(struct device *dev, struct sk_buff *skb)
 	if (brcmf_rx_hdrpull(drvr, skb, &ifp))
 		return;
 
-	brcmf_fweh_process_skb(ifp->drvr, skb);
+	brcmf_fweh_process_skb(ifp->drvr, skb, 0);
 	brcmu_pkt_buf_free_skb(skb);
 }
 
@@ -417,6 +441,11 @@ void brcmf_txfinalize(struct brcmf_if *ifp, struct sk_buff *txp, bool success)
 {
 	struct ethhdr *eh;
 	u16 type;
+
+	if (!ifp) {
+		brcmu_pkt_buf_free_skb(txp);
+		return;
+	}
 
 	eh = (struct ethhdr *)(txp->data);
 	type = ntohs(eh->h_proto);
@@ -553,7 +582,8 @@ int brcmf_net_attach(struct brcmf_if *ifp, bool rtnl_locked)
 	ndev->ethtool_ops = &brcmf_ethtool_ops;
 
 	/* set the mac address & netns */
-	memcpy(ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
+	if (!ifp->user_mac_set)
+		memcpy(ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
 	dev_net_set(ndev, wiphy_net(cfg_to_wiphy(drvr->config)));
 
 	INIT_WORK(&ifp->multicast_work, _brcmf_set_multicast_list);
@@ -661,7 +691,8 @@ static int brcmf_net_p2p_attach(struct brcmf_if *ifp)
 	ndev->netdev_ops = &brcmf_netdev_ops_p2p;
 
 	/* set the mac address */
-	memcpy(ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
+	if (!ifp->user_mac_set)
+		memcpy(ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
 
 	if (register_netdev(ndev) != 0) {
 		brcmf_err("couldn't register the p2p net device\n");
@@ -741,6 +772,7 @@ struct brcmf_if *brcmf_add_if(struct brcmf_pub *drvr, s32 bsscfgidx, s32 ifidx,
 	init_waitqueue_head(&ifp->pend_8021x_wait);
 	spin_lock_init(&ifp->netif_stop_lock);
 
+	ifp->user_mac_set = false;
 	if (mac_addr != NULL)
 		memcpy(ifp->mac_addr, mac_addr, ETH_ALEN);
 
@@ -1136,7 +1168,8 @@ int brcmf_bus_started(struct device *dev)
 	}
 
 #ifdef CPTCFG_BRCM_INSMOD_NO_FW
-	memcpy(ifp->ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
+	if (!ifp->user_mac_set)
+		memcpy(ifp->ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
 #else
 	ret = brcmf_net_attach(ifp, false);
 #endif
@@ -1240,7 +1273,11 @@ void brcmf_detach(struct device *dev)
 
 	/* make sure primary interface removed last */
 	for (i = BRCMF_MAX_IFS - 1; i > -1; i--)
+#ifndef CPTCFG_BRCM_INSMOD_NO_FW
 		brcmf_remove_interface(drvr->iflist[i], false);
+#else
+		brcmf_remove_interface(drvr->iflist[i], true);
+#endif
 
 	brcmf_cfg80211_detach(drvr->config);
 
@@ -1540,6 +1577,13 @@ int brcmf_set_power(bool on, unsigned long msec)
 				regulator_disable(wifi_regulator);
 				return -EIO;
 			}
+#ifdef CPTCFG_BRCMFMAC_NV_GPIO
+			/* Power on GPIO */
+			if (tegra_toggle_gpio(true, msec) < 0) {
+				regulator_disable(wifi_regulator);
+				return -EIO;
+			}
+#endif /* CPTCFG_BRCMFMAC_NV_GPIO */
 			msleep(msec);
 #ifdef CPTCFG_BRCMFMAC_SDIO
 			wifi_card_detect(true);
@@ -1554,14 +1598,15 @@ int brcmf_set_power(bool on, unsigned long msec)
 #ifdef CPTCFG_BRCMFMAC_PCIE
 			brcmf_pcie_exit();
 #endif
+#ifdef CPTCFG_BRCMFMAC_NV_GPIO
+			/* Power off GPIO */
+			if (tegra_toggle_gpio(false, msec) < 0)
+				brcmf_err("Cannot disable gpio\n");
+#endif /* CPTCFG_BRCMFMAC_NV_GPIO */
 			if (regulator_disable(wifi_regulator))
 				brcmf_err("Cannot disable wifi regulator\n");
 		}
 	}
-
-#ifdef CPTCFG_BRCMFMAC_NV_GPIO
-	toggle_gpio(on, msec);
-#endif /* CPTCFG_BRCMFMAC_NV_GPIO */
 
 	return 0;
 }
@@ -1613,6 +1658,9 @@ int brcmf_android_netdev_open(struct net_device *ndev)
 	}
 failed:
 	if (ret) {
+#ifdef CPTCFG_NV_CUSTOM_STATS
+		TEGRA_SYSFS_HISTOGRAM_STAT_INC(wifi_on_fail);
+#endif
 		brcmf_android_wake_unlock(drvr);
 		return ret;
 	}
@@ -1621,6 +1669,12 @@ failed:
 #ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
 	if (ifp->bsscfgidx == 0) {
 		tegra_sysfs_on();
+#ifdef CPTCFG_NV_CUSTOM_STATS
+		if (ret)
+			TEGRA_SYSFS_HISTOGRAM_STAT_INC(wifi_on_fail);
+		else
+			TEGRA_SYSFS_HISTOGRAM_STAT_INC(wifi_on_success);
+#endif
 	}
 #endif
 
@@ -1684,15 +1738,15 @@ netdev_tx_t brcmf_android_netdev_start_xmit(struct sk_buff *skb,
 	netdev_tx_t ret;
 	struct brcmf_if *ifp = netdev_priv(ndev);
 
+#ifdef CPTCFG_NV_CUSTOM_CAP
+	tegra_sysfs_histogram_tcpdump_tx(skb, __func__, __LINE__);
+#endif
 	brcmf_android_wake_lock(ifp->drvr);
 
 	ret = brcmf_netdev_start_xmit(skb, ndev);
 
 	brcmf_android_wake_unlock(ifp->drvr);
 
-#ifdef CPTCFG_NV_CUSTOM_CAP
-	tegra_sysfs_histogram_tcpdump_tx(skb, __func__, __LINE__);
-#endif
 	return ret;
 }
 
@@ -1790,6 +1844,10 @@ brcmf_set_country(struct net_device *ndev, char *country)
 			ccreq.ccode[1] = brcmf_mp_global.country_code_map[i].ccode[1];
 			ccreq.ccode[2] = 0;
 			ccreq.rev = brcmf_mp_global.country_code_map[i].rev;
+#ifdef CPTCFG_NV_CUSTOM_STATS
+			memcpy(bcmdhd_stat.fw_stat.cur_country_code,
+				ccreq.ccode, BRCMF_COUNTRY_BUF_SZ);
+#endif
 			goto set_country;
 		}
 	}
@@ -1818,6 +1876,200 @@ set_country:
 	return 0;
 }
 
+int
+brcmf_start_mkeep_alive(struct net_device *ndev, u8 keep_alive_id,
+	u8 *ip_pkt, u16 ip_pkt_len, u8* src_mac, u8* dst_mac, u32 period_msec)
+{
+	struct wireless_dev *wdev = ndev->ieee80211_ptr;
+	struct brcmf_if *ifp = NULL;
+	struct brcmf_mkeep_alive_info *keep_alive_pkt;
+	int buf_len = 0;
+	int res = -1;
+	int len_bytes = 0;
+	int i = 0;
+
+	/* ether frame to have both max IP pkt (256 bytes) and ether header */
+	char *pmac_frame;
+
+	if (!wdev)
+		return -ENODEV;
+
+	ifp = netdev_priv(ndev);
+	if (!ifp)
+		return -ENODEV;
+	/*
+	 * The mkeep_alive packet is for STA interface only; if the bss is configured as AP,
+	 * dongle shall reject a mkeep_alive request.
+	 */
+	if (wdev->iftype != NL80211_IFTYPE_STATION) {
+		brcmf_err("sta mode not supported \n");
+		return res;
+	}
+
+	if (ip_pkt_len > MKEEP_ALIVE_IP_PKT_MAX) {
+		brcmf_err("failed to start keep alive-Ip packet len is greater than expected \n");
+		return res;
+	}
+
+	brcmf_dbg(TRACE, "%s execution\n", __FUNCTION__);
+	if ((keep_alive_pkt = kzalloc(KEEP_ALIVE_BUF_SIZE, GFP_KERNEL)) == NULL) {
+		brcmf_err("mkeep_alive pkt alloc failed\n");
+		return -ENOMEM;
+	}
+
+	if ((pmac_frame = kzalloc(KEEP_ALIVE_FRAME_SIZE, GFP_KERNEL)) == NULL) {
+		brcmf_err("failed to allocate mac_frame with size %d\n", KEEP_ALIVE_FRAME_SIZE);
+		res = -ENOMEM;
+		goto exit;
+	}
+
+	memcpy((char *)keep_alive_pkt, &keep_alive_id, sizeof(keep_alive_id));
+
+	/*
+	 * Get current mkeep-alive status.
+	 */
+	res = brcmf_fil_iovar_data_get(ifp, "mkeep_alive", keep_alive_pkt,
+			KEEP_ALIVE_BUF_SIZE);
+	if (res) {
+		brcmf_err("%s: Get mkeep_alive failed (error=%d)\n", __FUNCTION__, res);
+		goto exit;
+	} else {
+		if (le32_to_cpu(keep_alive_pkt->period_msec != 0)) {
+			brcmf_err("%s: Get mkeep_alive failed, ID %u is in use.\n",
+				__FUNCTION__, keep_alive_id);
+			/* Current occupied ID info */
+			brcmf_err("%s: mkeep_alive\n", __FUNCTION__);
+			brcmf_err("   Id    : %d\n"
+				"   Period: %d msec\n"
+				"   Length: %d\n"
+				"   Packet: 0x",
+				keep_alive_pkt->keep_alive_id,
+				le32_to_cpu(keep_alive_pkt->period_msec),
+				le16_to_cpu(keep_alive_pkt->len_bytes));
+
+			for (i = 0; i < keep_alive_pkt->len_bytes; i++) {
+				brcmf_err("%02x", keep_alive_pkt->data[i]);
+			}
+			brcmf_err("\n");
+			// notfound
+			res = -EINVAL;
+			goto exit;
+		}
+	}
+
+	/* Request the specified ID */
+	memset(keep_alive_pkt, 0, MAX_KEEP_ALIVE_PKT_SIZE);
+	keep_alive_pkt->period_msec = cpu_to_le32(period_msec);
+	keep_alive_pkt->version = cpu_to_le16(BRCMF_MKEEP_ALIVE_VERSION);
+	keep_alive_pkt->length = cpu_to_le16(BRCMF_MKEEP_ALIVE_FIXED_LEN);
+
+	/* ID assigned */
+	keep_alive_pkt->keep_alive_id = keep_alive_id;
+
+	buf_len += BRCMF_MKEEP_ALIVE_FIXED_LEN;
+
+	/*
+	 * Build up Ethernet Frame
+	 */
+
+	/* Mapping dest mac addr */
+	memcpy(pmac_frame, dst_mac, ETH_ALEN);
+	pmac_frame += ETH_ALEN;
+
+	/* Mapping src mac addr */
+	memcpy(pmac_frame, src_mac, ETH_ALEN);
+	pmac_frame += ETH_ALEN;
+
+	/* Mapping Ethernet type (ETHERTYPE_IP: 0x0800) */
+	*(pmac_frame++) = 0x08;
+	*(pmac_frame++) = 0x00;
+
+	/* Mapping IP pkt */
+	memcpy(pmac_frame, ip_pkt, ip_pkt_len);
+	pmac_frame += ip_pkt_len;
+
+	/*
+	 * Length of ether frame (assume to be all hexa bytes)
+	 *     = src mac + dst mac + ether type + ip pkt len
+	 */
+	len_bytes = ETH_ALEN*2 + 2 + ip_pkt_len;
+	/* Get back to the beginning. */
+	pmac_frame -= len_bytes;
+	memcpy(keep_alive_pkt->data, pmac_frame, len_bytes);
+	buf_len += len_bytes;
+	keep_alive_pkt->len_bytes = cpu_to_le16(len_bytes);
+
+	res = brcmf_fil_iovar_data_set(ifp, "mkeep_alive", keep_alive_pkt, buf_len);
+
+exit:
+	kfree(pmac_frame);
+	kfree(keep_alive_pkt);
+	return res;
+}
+
+int
+brcmf_stop_mkeep_alive(struct net_device *ndev, u8 keep_alive_id)
+{
+	struct wireless_dev *wdev = ndev->ieee80211_ptr;
+	struct brcmf_mkeep_alive_info *keep_alive_pkt;
+	int res = -1;
+	struct brcmf_if *ifp = NULL;
+
+	if (!wdev)
+		return -ENODEV;
+
+	ifp = netdev_priv(ndev);
+	if (!ifp)
+		return -ENODEV;
+
+	/*
+	 * The mkeep_alive packet is for STA interface only; if the bss is configured as AP,
+	 * dongle shall reject a mkeep_alive request.
+	 */
+	if (wdev->iftype != NL80211_IFTYPE_STATION) {
+		brcmf_err("sta mode not supported \n");
+		return res;
+	}
+	brcmf_dbg(TRACE,"%s execution\n", __FUNCTION__);
+
+	if ((keep_alive_pkt = kzalloc(KEEP_ALIVE_BUF_SIZE, GFP_KERNEL)) == NULL) {
+		brcmf_err("mkeep_alive pkt alloc failed\n");
+		return -ENOMEM;
+	}
+
+	memcpy((char *)keep_alive_pkt, &keep_alive_id, sizeof(keep_alive_id));
+
+	/*
+	 * Get current mkeep-alive status.
+	 */
+	res = brcmf_fil_iovar_data_get(ifp, "mkeep_alive", keep_alive_pkt,
+			KEEP_ALIVE_BUF_SIZE);
+
+	if (res) {
+		brcmf_err("%s: Get mkeep_alive failed (error=%d)\n", __FUNCTION__, res);
+		goto exit;
+	}
+
+	/* Make it stop if available */
+	if (le32_to_cpu(keep_alive_pkt->period_msec != 0)) {
+		brcmf_dbg(INFO,"stop mkeep_alive on ID %d\n", keep_alive_id);
+		memset(keep_alive_pkt, 0, MAX_KEEP_ALIVE_PKT_SIZE);
+		keep_alive_pkt->period_msec = 0;
+		keep_alive_pkt->version = cpu_to_le16(BRCMF_MKEEP_ALIVE_VERSION);
+		keep_alive_pkt->length = cpu_to_le16(BRCMF_MKEEP_ALIVE_FIXED_LEN);
+		keep_alive_pkt->keep_alive_id = keep_alive_id;
+		res = brcmf_fil_iovar_data_set(ifp, "mkeep_alive", keep_alive_pkt,
+				sizeof(struct brcmf_mkeep_alive_info));
+	} else {
+		brcmf_err("%s: Keep alive ID %u does not exist.\n", __FUNCTION__,
+				keep_alive_id);
+		res = -EINVAL;
+	}
+exit:
+	kfree(keep_alive_pkt);
+	return res;
+}
+
 int brcmf_android_priv_cmd(struct net_device *ndev, struct ifreq *ifr, int cmd)
 {
 	struct brcmf_if *ifp = netdev_priv(ndev);
@@ -1826,10 +2078,25 @@ int brcmf_android_priv_cmd(struct net_device *ndev, struct ifreq *ifr, int cmd)
 	int bytes_written = 0;
 	struct brcmf_android_wifi_priv_cmd priv_cmd;
 
-	if (copy_from_user(&priv_cmd, ifr->ifr_data,
+#ifdef CONFIG_COMPAT
+	if (is_compat_task()) {
+		compat_brcmf_android_wifi_priv_cmd compat_priv_cmd;
+		if (copy_from_user(&compat_priv_cmd, ifr->ifr_data,
+			sizeof(compat_brcmf_android_wifi_priv_cmd))) {
+			ret = -EFAULT;
+			goto exit;
+		}
+		priv_cmd.buf = compat_ptr(compat_priv_cmd.buf);
+		priv_cmd.used_len = compat_priv_cmd.used_len;
+		priv_cmd.total_len = compat_priv_cmd.total_len;
+	} else
+#endif /* CONFIG_COMPAT */
+	{
+		if (copy_from_user(&priv_cmd, ifr->ifr_data,
 			   sizeof(struct brcmf_android_wifi_priv_cmd))) {
-		ret = -EFAULT;
-		goto exit;
+			ret = -EFAULT;
+			goto exit;
+		}
 	}
 
 	if (priv_cmd.total_len > PRIVATE_COMMAND_MAX_LEN ||

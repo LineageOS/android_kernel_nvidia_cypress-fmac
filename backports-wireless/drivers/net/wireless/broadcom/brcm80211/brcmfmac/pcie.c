@@ -1,4 +1,5 @@
 /* Copyright (c) 2014 Broadcom Corporation
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -1883,12 +1884,8 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 						    BRCMF_FW_REQ_NV_OPTIONAL,
 					  devinfo->fw_name, devinfo->nvram_name,
 					  brcmf_pcie_setup, domain_nr, bus_nr);
-	if (ret == 0) {
-#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
-		tegra_sysfs_bus_register(&pdev->dev);
-#endif
+	if (ret == 0)
 		return 0;
-	}
 fail_bus:
 #ifdef CPTCFG_BRCM_INSMOD_NO_FW
 	kfree(drvr);
@@ -1919,9 +1916,6 @@ brcmf_pcie_remove(struct pci_dev *pdev)
 	bus = dev_get_drvdata(&pdev->dev);
 	if (bus == NULL)
 		return;
-#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
-		tegra_sysfs_bus_unregister(&pdev->dev);
-#endif
 
 	devinfo = bus->bus_priv.pcie->devinfo;
 
@@ -1962,6 +1956,9 @@ static int brcmf_pcie_pm_enter_D3(struct device *dev)
 
 	brcmf_dbg(PCIE, "Enter\n");
 
+#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
+	tegra_sysfs_suspend();
+#endif
 	bus = dev_get_drvdata(dev);
 	devinfo = bus->bus_priv.pcie->devinfo;
 
@@ -1976,14 +1973,14 @@ static int brcmf_pcie_pm_enter_D3(struct device *dev)
 	if (!devinfo->mbdata_completed) {
 		brcmf_err("Timeout on response for entering D3 substate\n");
 		brcmf_bus_change_state(bus, BRCMF_BUS_UP);
+#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
+		tegra_sysfs_resume();
+#endif
 		return -EIO;
 	}
 
 	devinfo->state = BRCMFMAC_PCIE_STATE_DOWN;
 	brcmf_android_wake_lock_waive(bus->drvr, false);
-#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
-	tegra_sysfs_suspend();
-#endif
 
 	return 0;
 }
@@ -2002,9 +1999,6 @@ static int brcmf_pcie_pm_leave_D3(struct device *dev)
 	devinfo = bus->bus_priv.pcie->devinfo;
 	brcmf_dbg(PCIE, "Enter, dev=%p, bus=%p\n", dev, bus);
 
-#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
-	tegra_sysfs_resume();
-#endif
 	/* Check if device is still up and running, if so we are ready */
 	if (brcmf_pcie_read_reg32(devinfo, BRCMF_PCIE_PCIE2REG_INTMASK) != 0) {
 		brcmf_dbg(PCIE, "Try to wakeup device....\n");
@@ -2015,6 +2009,9 @@ static int brcmf_pcie_pm_leave_D3(struct device *dev)
 		brcmf_pcie_select_core(devinfo, BCMA_CORE_PCIE2);
 		brcmf_bus_change_state(bus, BRCMF_BUS_UP);
 		brcmf_pcie_intr_enable(devinfo);
+#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
+		tegra_sysfs_resume();
+#endif
 		return 0;
 	}
 
@@ -2049,7 +2046,11 @@ static const struct dev_pm_ops brcmf_pciedrvr_pm = {
 	BRCM_PCIE_VENDOR_ID_BROADCOM, dev_id,\
 	subvend, subdev, PCI_CLASS_NETWORK_OTHER << 8, 0xffff00, 0 }
 
+#ifdef CPTCFG_BRCMFMAC_NV_GPIO
+const struct pci_device_id brcmf_pcie_devid_table[] = {
+#else
 static const struct pci_device_id brcmf_pcie_devid_table[] = {
+#endif
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4350_DEVICE_ID),
 	BRCMF_PCIE_DEVICE(BRCM_PCIE_4354_RAW_DEVICE_ID),
 	BRCMF_PCIE_DEVICE_SUB(BRCM_PCIE_4355_DEVICE_ID,BRCM_PCIE_VENDOR_ID_BROADCOM,BRCM_PCIE_4355_DEVICE_ID),

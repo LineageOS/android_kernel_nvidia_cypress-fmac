@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2013 Broadcom Corporation
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -504,6 +505,8 @@ static void brcmf_fw_request_code_done(const struct firmware *fw, void *ctx)
 #ifdef CPTCFG_BRCM_INSMOD_NO_FW
 	if (!brcmf_android_in_reset(bus_if->drvr)) {
 		fwctx->done(fwctx->dev, ret, fw, NULL, 0);
+		if (fw)
+			release_firmware(fw);
 		kfree(fwctx);
 		return;
 	}

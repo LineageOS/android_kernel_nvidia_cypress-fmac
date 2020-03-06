@@ -1,7 +1,7 @@
 /*
- * drivers/net/wireless/bcmdhd_pcie/dhd_custom_tegra.c
+ * nv_common.c
  *
- * Copyright (C) 2014-2018 NVIDIA Corporation. All rights reserved.
+ * Copyright (C) 2014-2019 NVIDIA Corporation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -12,7 +12,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
-*/
+ */
 
 #ifdef CPTCFG_BRCMFMAC_NV_CUSTOM_FILES
 #include <linux/types.h>
@@ -21,6 +21,7 @@
 #include <linux/file.h>
 #include <linux/etherdevice.h>
 #include <linux/of.h>
+#include <linux/pci-tegra.h>
 #include <linux/ieee80211.h>
 
 #include "debug.h"
@@ -43,7 +44,27 @@ extern bool builtin_roam_disabled;
 #include <linux/gpio.h>
 #include <linux/platform_device.h>
 
-void setup_gpio(struct platform_device *pdev, bool on) {
+/* brcmfmac PCIe devids */
+extern const struct pci_device_id brcmf_pcie_devid_table[];
+struct pci_dev *tegra_get_pdev(void)
+{
+	struct pci_dev *found = NULL;
+	const struct pci_device_id *ids = brcmf_pcie_devid_table;
+
+	while (ids->vendor || ids->subvendor || ids->class_mask) {
+		found = pci_get_device(ids->vendor, ids->device, NULL);
+		if (found) {
+			pci_dev_put(found);
+			break;
+		}
+		ids++;
+	}
+
+	return found;
+}
+
+void tegra_setup_gpio(struct platform_device *pdev, bool on)
+{
 	struct device_node *dt_node;
 	int ret;
 
@@ -61,14 +82,14 @@ void setup_gpio(struct platform_device *pdev, bool on) {
 			if (gpio_is_valid(brcmf_mp_global.wlan_pwr)) {
 			       ret = devm_gpio_request(&pdev->dev, brcmf_mp_global.wlan_pwr,
 							"wlan_pwr");
-				if(ret)
+				if (ret)
 					brcmf_err("Failed to request wlan_pwr gpio\n");
 			}
 
 			if (gpio_is_valid(brcmf_mp_global.wlan_rst)) {
 				ret = devm_gpio_request(&pdev->dev, brcmf_mp_global.wlan_rst,
-						"wlan_rst");
-				if(ret)
+							"wlan_rst");
+				if (ret)
 					brcmf_err("Failed to request wlan_rst gpio\n");
 			}
 		}
@@ -77,11 +98,40 @@ void setup_gpio(struct platform_device *pdev, bool on) {
 #ifdef CPTCFG_BRCMFMAC_NV_PRIV_CMD
 	builtin_roam_disabled = device_property_read_bool(&pdev->dev, "builtin-roam-disabled");
 #endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
-
 }
 
-void toggle_gpio(bool on, unsigned long msec) {
+int tegra_toggle_gpio(bool on, unsigned long msec)
+{
+	int ret = 0;
+	struct pci_dev *pdev = NULL;
 
+	pdev = tegra_get_pdev();
+	if (!pdev) {
+		brcmf_err("Unable get pdev\n");
+		return -EINVAL;
+	}
+
+	/* Handle pre gpio toggle */
+	if (on) {
+		brcmf_dbg(ANDROID, "PCIe linkup pre\n");
+		tegra_pcie_port_enable_per_pdev(pdev);
+		ret = tegra_pcie_pm_control(TEGRA_PCIE_RESUME_PRE, pdev);
+		if (ret) {
+			brcmf_err("Failed to resume PCIe link pre\n");
+			return ret;
+		}
+	} else {
+		brcmf_dbg(ANDROID, "PCIe link disable\n");
+		pci_save_state(pdev);
+		tegra_pcie_port_disable_per_pdev(pdev);
+		ret = tegra_pcie_pm_control(TEGRA_PCIE_SUSPEND, pdev);
+		if (ret) {
+			brcmf_err("Failed to stop PCIe link\n");
+			return ret;
+		}
+	}
+
+	/* toggle gpio */
 	if (gpio_is_valid(brcmf_mp_global.wlan_pwr))
 		gpio_direction_output(brcmf_mp_global.wlan_pwr, on);
 	if (gpio_is_valid(brcmf_mp_global.wlan_rst))
@@ -89,11 +139,23 @@ void toggle_gpio(bool on, unsigned long msec) {
 
 	if (msec && on)
 		msleep(msec);
+
+	/* Handle post gpio toggle */
+	if (on) {
+		ret = tegra_pcie_pm_control(TEGRA_PCIE_RESUME_POST, pdev);
+		pci_restore_state(pdev);
+		if (ret) {
+			brcmf_err("Failed to resume PCIe link post\n");
+			return ret;
+		}
+	}
+
+	return ret;
 }
 #endif /* CPTCFG_BRCMFMAC_NV_GPIO */
 
 #ifdef CPTCFG_BRCMFMAC_NV_CUSTOM_MAC
-#define WIFI_MAC_ADDR_FILE "/mnt/factory/wifi/wifi_mac.txt"
+#define WIFI_MAC_ADDR_FILE "/mnt/vendor/factory/wifi/wifi_mac.txt"
 
 static int wifi_get_mac_addr_file(unsigned char *buf)
 {
@@ -130,18 +192,17 @@ static int wifi_get_mac_addr_file(unsigned char *buf)
 		brcmf_err("%s: using wifi mac %02x:%02x:%02x:%02x:%02x:%02x\n",
 			__func__,
 			mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-		buf[0] = (unsigned char) mac[0];
-		buf[1] = (unsigned char) mac[1];
-		buf[2] = (unsigned char) mac[2];
-		buf[3] = (unsigned char) mac[3];
-		buf[4] = (unsigned char) mac[4];
-		buf[5] = (unsigned char) mac[5];
-
+		buf[0] = (unsigned char)mac[0];
+		buf[1] = (unsigned char)mac[1];
+		buf[2] = (unsigned char)mac[2];
+		buf[3] = (unsigned char)mac[3];
+		buf[4] = (unsigned char)mac[4];
+		buf[5] = (unsigned char)mac[5];
 	}
 
 	if (!is_valid_ether_addr(buf)) {
 		brcmf_err("%s: invalid mac %02x:%02x:%02x:%02x:%02x:%02x\n",
-			__FUNCTION__,
+			__func__,
 			buf[0], buf[1], buf[2], buf[3], buf[4], buf[5]);
 		ret = -EINVAL;
 	}
@@ -224,7 +285,8 @@ static int wifi_get_mac_addr(unsigned char *buf)
 	return ret;
 }
 
-int nv_set_mac_address(struct net_device *ndev) {
+int nv_set_mac_address(struct net_device *ndev)
+{
 
 	struct brcmf_if *ifp =  netdev_priv(ndev);
 	int err = 0;
@@ -235,9 +297,11 @@ int nv_set_mac_address(struct net_device *ndev) {
 		brcmf_err("No custom MAC address found, %d\n", err);
 		return err;
 	} else {
+		if (ifp->user_mac_set)
+			memcpy(ifp->mac_addr, ifp->ndev->dev_addr, ETH_ALEN);
 
 		brcmf_err("%s: setting mac %02x:%02x:%02x:%02x:%02x:%02x\n",
-			__FUNCTION__,
+			__func__,
 			ifp->mac_addr[0],
 			ifp->mac_addr[1],
 			ifp->mac_addr[2],
@@ -253,7 +317,8 @@ int nv_set_mac_address(struct net_device *ndev) {
 			return err;
 		} else {
 			brcmf_dbg(TRACE, "updated to %pM\n", ifp->mac_addr);
-			memcpy(ifp->ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
+			if (!ifp->user_mac_set)
+				memcpy(ifp->ndev->dev_addr, ifp->mac_addr, ETH_ALEN);
 		}
 	}
 
@@ -304,14 +369,6 @@ int wifi_platform_get_country_code_map(void)
 
 		ret = of_property_read_string(child, "custom_locale", &strptr);
 		if (ret) {
-		brcmf_err("read error iso_abbrev %s\n", child->name);
-			goto fail;
-		} else {
-			strncpy(country[i].country_abbrev, strptr, 3);
-		}
-
-		ret = of_property_read_string(child, "custom_locale", &strptr);
-		if (ret) {
 			brcmf_err("read error custom_locale %s\n", child->name);
 			goto fail;
 		} else {
@@ -353,7 +410,7 @@ int nv_brcmf_android_set_im_mode(struct brcmf_pub *drvr,
 	int mode = 0;
 	int error = 0;
 	struct brcmf_if *ifp =	netdev_priv(ndev);
-	int ampdu_mpdu;
+	int ampdu_mpdu = -1;
 	int ampdu_rx_tid = -1;
 	int i;
 #ifdef VSDB_BW_ALLOCATE_ENABLE
@@ -384,8 +441,7 @@ set_mode:
 		mchan_algo = 1; /* BW based */
 		mchan_bw = 25;	/* 25:75 */
 #endif /* VSDB_BW_ALLOCATE_ENABLE */
-	}
-	else if (mode == 2) {
+	} else if (mode == 2) {
 		/* Miracast sink/PC Gaming mode */
 		ampdu_mpdu = 8; /* FW default */
 #ifdef VSDB_BW_ALLOCATE_ENABLE
@@ -480,8 +536,7 @@ int nv_set_roam_mode(struct net_device *dev, char *command, int total_len)
 		brcmf_err("Failed to set roaming Mode %d, error = %d\n",
 			mode, error);
 		return -1;
-	}
-	else {
+	} else {
 		/* Log in IDS */
 		brcmf_err("succeeded to set roaming Mode %d, error = %d\n",
 				mode, error);

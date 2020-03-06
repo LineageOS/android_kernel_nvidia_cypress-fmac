@@ -26,9 +26,9 @@
 #include "fweh.h"
 #include "fwil.h"
 #include "proto.h"
-#ifdef CPTCFG_BRCMFMAC_NV_IDS
-#include "nv_logger.h"
-#endif /* CPTCFG_BRCMFMAC_NV_IDS */
+#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
+#include "nv_custom_sysfs_tegra.h"
+#endif /* CPTCFG_NV_CUSTOM_SYSFS_TEGRA */
 
 /**
  * struct brcmf_fweh_queue_item - event item on event queue.
@@ -125,6 +125,9 @@ static int brcmf_fweh_call_event_handler(struct brcmf_if *ifp,
 				write_log(code,
 					brcmf_fweh_event_name(code), emsg->addr);
 #endif /* CPTCFG_BRCMFMAC_NV_IDS */
+#ifdef CPTCFG_NV_DEBUG
+			nv_debug_fwevents(ifp, emsg, data);
+#endif /*CPTCFG_NV_DEBUG */
 			err = fweh->evt_handler[code](ifp, emsg, data);
 #ifdef CPTCFG_BRCMFMAC_NV_IDS
 		}

@@ -59,14 +59,23 @@ static DEVICE_ATTR(scan, S_IRUGO | S_IWUSR,
 	tegra_sysfs_histogram_scan_store);
 #endif
 
+#ifdef CPTCFG_NV_CUSTOM_STATS
+static DEVICE_ATTR(stat, S_IRUGO | S_IWUSR,
+	tegra_sysfs_histogram_stat_show,
+	tegra_sysfs_histogram_stat_store);
+#endif
+
 static struct attribute *tegra_sysfs_entries_histogram[] = {
 #ifdef CPTCFG_NV_CUSTOM_CAP
 	&dev_attr_ping.attr,
 	&dev_attr_rssi.attr,
 	&dev_attr_tcpdump.attr,
+#endif
 #ifdef CPTCFG_NV_CUSTOM_SCAN
 	&dev_attr_scan.attr,
 #endif
+#ifdef CPTCFG_NV_CUSTOM_STATS
+	&dev_attr_stat.attr,
 #endif
 	NULL,
 };
@@ -150,10 +159,14 @@ tegra_sysfs_register(struct device *dev)
 	tegra_sysfs_histogram_ping_work_start();
 	tegra_sysfs_histogram_rssi_work_start();
 	tegra_sysfs_histogram_tcpdump_work_start();
+#endif
 #ifdef CPTCFG_NV_CUSTOM_SCAN
 	tegra_sysfs_histogram_scan_work_start();
 #endif
+#ifdef CPTCFG_NV_CUSTOM_STATS
+	tegra_sysfs_histogram_stat_work_start();
 #endif
+	tegra_sysfs_bus_register(dev);
 	goto exit;
 
 #ifdef CPTCFG_NV_CUSTOM_RF_TEST
@@ -170,6 +183,9 @@ tegra_sysfs_unregister(struct device *dev)
 	pr_info("%s\n", __func__);
 
 	/* stop sysfs work */
+#ifdef CPTCFG_NV_CUSTOM_STATS
+	tegra_sysfs_histogram_stat_work_stop();
+#endif
 #ifdef CPTCFG_NV_CUSTOM_SCAN
 	tegra_sysfs_histogram_scan_work_stop();
 #endif
@@ -194,6 +210,7 @@ tegra_sysfs_unregister(struct device *dev)
 #ifdef CPTCFG_BRCMFMAC_NV_IDS
 	dhdlog_sysfs_deinit(dev);
 #endif /* CPTCFG_BRCMFMAC_NV_IDS */
+	tegra_sysfs_bus_unregister(dev);
 }
 
 int tegra_sysfs_wifi_on;
@@ -213,10 +230,12 @@ tegra_sysfs_on(void)
 #ifdef CPTCFG_NV_CUSTOM_SCAN
 	tegra_sysfs_histogram_scan_work_start();
 #endif
+#ifdef CPTCFG_NV_CUSTOM_STATS
+	tegra_sysfs_histogram_stat_work_start();
+#endif
 
 #ifdef CPTCFG_BRCMFMAC_NV_CUSTOM_MAC
 	if (dhd_custom_sysfs_tegra_histogram_stat_netdev != NULL) {
-		brcmf_err("%s: MAC seting\n", __func__);
 		nv_set_mac_address(
 			dhd_custom_sysfs_tegra_histogram_stat_netdev);
 	}
@@ -238,6 +257,9 @@ tegra_sysfs_off(void)
 #ifdef CPTCFG_NV_CUSTOM_SCAN
 	tegra_sysfs_histogram_scan_work_stop();
 #endif
+#ifdef CPTCFG_NV_CUSTOM_SCAN
+	tegra_sysfs_histogram_scan_work_stop();
+#endif
 
 }
 
@@ -251,6 +273,9 @@ tegra_sysfs_suspend(void)
 		return;
 
 	/* suspend (stop) sysfs work */
+#ifdef CPTCFG_NV_CUSTOM_STATS
+	tegra_sysfs_histogram_stat_work_stop();
+#endif
 
 #ifdef CPTCFG_NV_CUSTOM_SCAN
 	tegra_sysfs_histogram_scan_work_stop();
@@ -285,6 +310,9 @@ tegra_sysfs_resume(void)
 #endif /*CPTCFG_BRCMFMAC_NV_IDS */
 #ifdef CPTCFG_NV_CUSTOM_SCAN
 	tegra_sysfs_histogram_scan_work_start();
+#endif
+#ifdef CPTCFG_NV_CUSTOM_STATS
+	tegra_sysfs_histogram_stat_work_start();
 #endif
 
 }

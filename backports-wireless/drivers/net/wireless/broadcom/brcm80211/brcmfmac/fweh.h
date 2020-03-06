@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2012 Broadcom Corporation
+ * Copyright (c) 2019, NVIDIA Corporation.  All Rights Reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -100,6 +101,7 @@ struct brcmf_cfg80211_info;
 	BRCMF_ENUM_DEF(DCS_REQUEST, 73) \
 	BRCMF_ENUM_DEF(FIFO_CREDIT_MAP, 74) \
 	BRCMF_ENUM_DEF(ACTION_FRAME_RX, 75) \
+	BRCMF_ENUM_DEF(CSA_COMPLETE_IND, 80) \
 	BRCMF_ENUM_DEF(TDLS_PEER_EVENT, 92) \
 	BRCMF_ENUM_DEF(BCMC_CREDIT_SUPPORT, 127) \
 	BRCMF_ENUM_DEF(ULP, 146)
@@ -212,7 +214,7 @@ enum brcmf_fweh_event_code {
  */
 #define BRCM_OUI				"\x00\x10\x18"
 #define BCMILCP_BCM_SUBTYPE_EVENT		1
-
+#define BCMILCP_SUBTYPE_VENDOR_LONG            32769
 
 /**
  * struct brcm_ethhdr - broadcom specific ether header.
@@ -357,10 +359,10 @@ void brcmf_fweh_process_event(struct brcmf_pub *drvr,
 void brcmf_fweh_p2pdev_setup(struct brcmf_if *ifp, bool ongoing);
 
 static inline void brcmf_fweh_process_skb(struct brcmf_pub *drvr,
-					  struct sk_buff *skb)
+					  struct sk_buff *skb, u16 stype)
 {
 	struct brcmf_event *event_packet;
-	u16 usr_stype;
+	u16 subtype, usr_stype;
 
 	/* only process events when protocol matches */
 	if (skb->protocol != cpu_to_be16(ETH_P_LINK_CTL))
@@ -369,8 +371,16 @@ static inline void brcmf_fweh_process_skb(struct brcmf_pub *drvr,
 	if ((skb->len + ETH_HLEN) < sizeof(*event_packet))
 		return;
 
-	/* check for BRCM oui match */
 	event_packet = (struct brcmf_event *)skb_mac_header(skb);
+
+	/* check subtype if needed */
+	if (unlikely(stype)) {
+		subtype = get_unaligned_be16(&event_packet->hdr.subtype);
+		if (subtype != stype)
+			return;
+	}
+
+	/* check for BRCM oui match */
 	if (memcmp(BRCM_OUI, &event_packet->hdr.oui[0],
 		   sizeof(event_packet->hdr.oui)))
 		return;

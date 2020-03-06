@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2012 Broadcom Corporation
+ * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -61,6 +62,7 @@
 #define BRCMF_C_SET_PM				86
 #define BRCMF_C_GET_REVINFO			98
 #define BRCMF_C_GET_CURR_RATESET		114
+#define BRCMF_C_GET_SCANSUPPRESS		115
 #define BRCMF_C_GET_AP				117
 #define BRCMF_C_SET_AP				118
 #define BRCMF_C_SET_SCB_AUTHORIZE		121
@@ -72,6 +74,7 @@
 #define BRCMF_C_GET_BSS_INFO			136
 #define BRCMF_C_GET_GET_PKTCNTS			137
 #define BRCMF_C_GET_BANDLIST			140
+#define BRCMF_C_GET_BAND			141
 #define BRCMF_C_SET_BAND			142
 #define BRCMF_C_SET_SCB_TIMEOUT			158
 #define BRCMF_C_GET_ASSOCLIST			159

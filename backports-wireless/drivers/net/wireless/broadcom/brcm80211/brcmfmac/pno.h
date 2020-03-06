@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016 Broadcom
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -20,9 +21,19 @@
 #define BRCMF_PNO_MAX_PFN_COUNT			16
 #define BRCMF_PNO_SCHED_SCAN_MIN_PERIOD	10
 #define BRCMF_PNO_SCHED_SCAN_MAX_PERIOD	508
+#define BRCMF_PNO_MAX_BUCKETS		16
+
+#define PNO_OUI_LEN	3
+
+#define ifp_to_pno(_ifp)	((_ifp)->drvr->config->pno)
 
 /* forward declaration */
-struct brcmf_pno_info;
+struct brcmf_pno_info {
+	int n_reqs;
+	u8 pno_oui[PNO_OUI_LEN];
+	struct cfg80211_sched_scan_request *reqs[BRCMF_PNO_MAX_BUCKETS];
+	struct mutex req_lock;
+};
 
 /**
  * brcmf_pno_start_sched_scan - initiate scheduled scan on device.

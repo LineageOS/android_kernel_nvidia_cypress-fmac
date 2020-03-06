@@ -85,7 +85,7 @@ void write_log_uninit()
 
 int write_log(int event, const char *buf, u8 *mac_addr)
 {
-	struct log_node *temp;
+	struct log_node *temp = NULL;
 	int buf_len = 0;
 	int info_len = 0;
 	int time_len = 0;
@@ -141,8 +141,9 @@ int write_log(int event, const char *buf, u8 *mac_addr)
 					date_time.tm_min,
 					date_time.tm_sec ,
 					(unsigned int)(now.tv_usec/1000));
-		if (info != NULL) {
+		if (strlen(info) > 0) {
 			info_len = strlen(info) + 1;
+
 			temp->log->info = kmalloc(info_len, GFP_ATOMIC);
 			if (temp->log->info != NULL)
 				strncpy(temp->log->info, info, info_len);
@@ -227,7 +228,7 @@ void write_queue_work(struct work_struct *work)
 	if (atomic_read(&list2_val) == 0) {
 		while (pos != &list2) {
 			list_for_each_safe(pos, n, &(list2)) {
-				if (list1_size > MAX_LOGLIMIT)
+				if (list2_size > MAX_LOGLIMIT)
 					break;
 				temp = list_entry(pos, struct log_node, list);
 			/* for the correct string of the event */

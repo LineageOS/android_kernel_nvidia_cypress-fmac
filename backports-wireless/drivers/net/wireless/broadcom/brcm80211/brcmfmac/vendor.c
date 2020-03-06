@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014 Broadcom Corporation
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,6 +30,10 @@
 #include "fwil.h"
 #include "android.h"
 
+#ifdef CPTCFG_BRCMFMAC_NV_PRIV_CMD
+#include "nv_android.h"
+#endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
+
 enum andr_vendor_subcmd {
 	GSCAN_SUBCMD_GET_CAPABILITIES = 0x1000,
 	GSCAN_SUBCMD_SET_CONFIG,
@@ -44,7 +49,32 @@ enum andr_vendor_subcmd {
 	ANDR_WIFI_SUBCMD_GET_FEATURE_SET_MATRIX,
 	ANDR_WIFI_RANDOM_MAC_OUI,
 	ANDR_WIFI_NODFS_CHANNELS,
-	ANDR_WIFI_SET_COUNTRY
+	ANDR_WIFI_SET_COUNTRY,
+#ifdef CPTCFG_BRCMFMAC_NV_PRIV_CMD
+	GSCAN_SUBCMD_SET_EPNO_SSID,
+	WIFI_SUBCMD_SET_SSID_WHITELIST,
+	WIFI_SUBCMD_SET_LAZY_ROAM_PARAMS,
+	WIFI_SUBCMD_ENABLE_LAZY_ROAM,
+	WIFI_SUBCMD_SET_BSSID_PREF,
+	WIFI_SUBCMD_SET_BSSID_BLACKLIST,
+	GSCAN_SUBCMD_ANQPO_CONFIG,
+	WIFI_SUBCMD_SET_RSSI_MONITOR,
+	RTT_SUBCMD_SET_CONFIG = 0x1100,
+	RTT_SUBCMD_CANCEL_CONFIG,
+	RTT_SUBCMD_GETCAPABILITY,
+	LSTATS_SUBCMD_GET_INFO = 0x1200,
+	DEBUG_START_LOGGING = 0x1400,
+	DEBUG_TRIGGER_MEM_DUMP,
+	DEBUG_GET_MEM_DUMP,
+	DEBUG_GET_VER,
+	DEBUG_GET_RING_STATUS,
+	DEBUG_GET_RING_DATA,
+	DEBUG_GET_FEATURE,
+	DEBUG_RESET_LOGGING,
+#endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
+	/* define all wifi calling related commands between 0x1600 and 0x16FF */
+	ANDR_OFFLOAD_SUBCMD_START_MKEEP_ALIVE = 0x1600,
+	ANDR_OFFLOAD_SUBCMD_STOP_MKEEP_ALIVE,
 };
 
 enum gscan_attributes {
@@ -84,6 +114,15 @@ enum andr_wifi_attr {
 	ANDR_WIFI_ATTRIBUTE_COUNTRY,
 	ANDR_WIFI_ATTRIBUTE_ND_OFFLOAD_VALUE,
 	ANDR_WIFI_ATTRIBUTE_TCPACK_SUP_VALUE
+};
+
+enum mkeep_alive_attributes {
+	MKEEP_ALIVE_ATTRIBUTE_ID,
+	MKEEP_ALIVE_ATTRIBUTE_IP_PKT,
+	MKEEP_ALIVE_ATTRIBUTE_IP_PKT_LEN,
+	MKEEP_ALIVE_ATTRIBUTE_SRC_MAC_ADDR,
+	MKEEP_ALIVE_ATTRIBUTE_DST_MAC_ADDR,
+	MKEEP_ALIVE_ATTRIBUTE_PERIOD_MSEC
 };
 
 #define GSCAN_BG_BAND_MASK	0x1
@@ -134,6 +173,36 @@ enum andr_wifi_attr {
 #define WIFI_FEATURE_CONFIG_NDO		0x200000
 /* Invalid Feature */
 #define WIFI_FEATURE_INVALID		0xFFFFFFFF
+
+
+/*
+ * This API is to be used for asynchronous vendor events. This
+ * shouldn't be used in response to a vendor command from its
+ * do_it handler context (instead wl_cfgvendor_send_cmd_reply should
+ * be used).
+ */
+int brcmf_cfg80211_vndr_send_async_event(struct wiphy *wiphy,
+	struct net_device *dev, int event_id, const void  *data, int len)
+{
+	u16 kflags;
+	struct sk_buff *skb;
+
+	kflags = in_atomic() ? GFP_ATOMIC : GFP_KERNEL;
+	skb = cfg80211_vendor_event_skb_alloc(dev, wiphy, len, event_id,
+					      kflags);
+	/* Alloc the SKB for vendor_event */
+	if (!skb) {
+		brcmf_err("%s: skb alloc failed", __func__);
+		return -ENOMEM;
+	}
+
+	/* Push the data to the skb */
+	nla_put_nohdr(skb, len, data);
+
+	cfg80211_vendor_event(skb, kflags);
+
+	return 0;
+}
 
 static int brcmf_cfg80211_vndr_cmds_dcmd_handler(struct wiphy *wiphy,
 						 struct wireless_dev *wdev,
@@ -415,6 +484,121 @@ brcmf_cfg80211_andr_set_country_handler(struct wiphy *wiphy,
 	return ret;
 }
 
+static int brcmf_cfg80211_start_mkeep_alive(struct wiphy *wiphy, struct wireless_dev *wdev,
+	const void *data, int len)
+{
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	struct net_device *ndev;
+	int ret = 0, rem, type;
+	u8 mkeep_alive_id = 0;
+	u8 *ip_pkt = NULL;
+	u16 ip_pkt_len = 0;
+	u8 src_mac[ETH_ALEN];
+	u8 dst_mac[ETH_ALEN];
+	u32 period_msec = 0;
+	const struct nlattr *iter;
+	gfp_t kflags = in_atomic() ? GFP_ATOMIC : GFP_KERNEL;
+
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+	ndev = ifp->ndev;
+	nla_for_each_attr(iter, data, len, rem) {
+		type = nla_type(iter);
+		switch (type) {
+			case MKEEP_ALIVE_ATTRIBUTE_ID:
+				mkeep_alive_id = nla_get_u8(iter);
+				break;
+			case MKEEP_ALIVE_ATTRIBUTE_IP_PKT_LEN:
+				ip_pkt_len = nla_get_u16(iter);
+				if (ip_pkt_len > MKEEP_ALIVE_IP_PKT_MAX) {
+					ret = -EOVERFLOW;
+					goto exit;
+				}
+				break;
+			case MKEEP_ALIVE_ATTRIBUTE_IP_PKT:
+				if (!ip_pkt_len) {
+					ret = -EOVERFLOW;
+					brcmf_err("ip packet length is 0\n");
+					goto exit;
+				}
+				ip_pkt = (u8 *)kzalloc(ip_pkt_len, kflags);
+				if (ip_pkt == NULL) {
+					ret = -ENOMEM;
+					brcmf_err("Failed to allocate mem for ip packet\n");
+					goto exit;
+				}
+				memcpy(ip_pkt, (u8*)nla_data(iter), ip_pkt_len);
+				break;
+			case MKEEP_ALIVE_ATTRIBUTE_SRC_MAC_ADDR:
+				memcpy(src_mac, nla_data(iter), ETH_ALEN);
+				break;
+			case MKEEP_ALIVE_ATTRIBUTE_DST_MAC_ADDR:
+				memcpy(dst_mac, nla_data(iter), ETH_ALEN);
+				break;
+			case MKEEP_ALIVE_ATTRIBUTE_PERIOD_MSEC:
+				period_msec = nla_get_u32(iter);
+				break;
+			default:
+				brcmf_err("Unknown type: %d\n", type);
+				ret = -EINVAL;
+				goto exit;
+		}
+	}
+
+	if (ip_pkt == NULL) {
+		ret = -EINVAL;
+		brcmf_err("ip packet is NULL\n");
+		goto exit;
+	}
+
+	ret = brcmf_start_mkeep_alive(ndev, mkeep_alive_id, ip_pkt, ip_pkt_len, src_mac,
+		dst_mac, period_msec);
+	if (ret < 0) {
+		brcmf_err("start_mkeep_alive is failed ret: %d\n", ret);
+	}
+
+exit:
+	kfree(ip_pkt);
+	return ret;
+}
+
+static int brcmf_cfg80211_stop_mkeep_alive(struct wiphy *wiphy, struct wireless_dev *wdev,
+	const void *data, int len)
+{
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	struct net_device *ndev;
+	int ret = 0, rem, type;
+	u8 mkeep_alive_id = 0;
+	const struct nlattr *iter;
+
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+	ndev = ifp->ndev;
+
+	nla_for_each_attr(iter, data, len, rem) {
+		type = nla_type(iter);
+		switch (type) {
+			case MKEEP_ALIVE_ATTRIBUTE_ID:
+				mkeep_alive_id = nla_get_u8(iter);
+				break;
+			default:
+				brcmf_err("Unknown type: %d\n", type);
+				ret = -EINVAL;
+				break;
+		}
+	}
+
+	ret = brcmf_stop_mkeep_alive(ndev, mkeep_alive_id);
+	if (ret < 0) {
+		brcmf_err("stop_mkeep_alive is failed ret: %d\n", ret);
+	}
+
+	return ret;
+}
+
+
 const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 	{
 		{
@@ -452,10 +636,124 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 			WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = brcmf_cfg80211_andr_get_feature_set_handler
 	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = ANDR_OFFLOAD_SUBCMD_START_MKEEP_ALIVE
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
+			WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = brcmf_cfg80211_start_mkeep_alive
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = ANDR_OFFLOAD_SUBCMD_STOP_MKEEP_ALIVE
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV |
+			WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = brcmf_cfg80211_stop_mkeep_alive
+	},
+#ifdef CPTCFG_BRCMFMAC_NV_PRIV_CMD
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = ANDR_WIFI_RANDOM_MAC_OUI
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_set_pno_mac_oui
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_GET_VER
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_get_ver
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_START_LOGGING
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_TRIGGER_MEM_DUMP
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_GET_MEM_DUMP
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_GET_RING_STATUS
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_GET_RING_DATA
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_GET_FEATURE
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_RESET_LOGGING
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+#endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
+};
+
+const struct  nl80211_vendor_cmd_info brcmf_vendor_events[] = {
+		{ BROADCOM_OUI, BRCM_VENDOR_EVENT_UNSPEC },
+		{ BROADCOM_OUI, BRCM_VENDOR_EVENT_PRIV_STR },
+		{ GOOGLE_OUI, GOOGLE_GSCAN_SIGNIFICANT_EVENT },
+		{ GOOGLE_OUI, GOOGLE_GSCAN_GEOFENCE_FOUND_EVENT },
+		{ GOOGLE_OUI, GOOGLE_GSCAN_BATCH_SCAN_EVENT },
+		{ GOOGLE_OUI, GOOGLE_SCAN_FULL_RESULTS_EVENT },
+		{ GOOGLE_OUI, GOOGLE_RTT_COMPLETE_EVENT },
+		{ GOOGLE_OUI, GOOGLE_SCAN_COMPLETE_EVENT },
+		{ GOOGLE_OUI, GOOGLE_GSCAN_GEOFENCE_LOST_EVENT },
+		{ GOOGLE_OUI, GOOGLE_SCAN_EPNO_EVENT },
+		{ GOOGLE_OUI, GOOGLE_DEBUG_RING_EVENT },
+		{ GOOGLE_OUI, GOOGLE_FW_DUMP_EVENT },
+		{ GOOGLE_OUI, GOOGLE_PNO_HOTSPOT_FOUND_EVENT },
+		{ GOOGLE_OUI, GOOGLE_RSSI_MONITOR_EVENT },
+		{ GOOGLE_OUI, GOOGLE_MKEEP_ALIVE_EVENT },
+		{ BROADCOM_OUI, BRCM_VENDOR_EVENT_IDSUP_STATUS },
+		{ BROADCOM_OUI, BRCM_VENDOR_EVENT_DRIVER_HANG }
 };
 
 void brcmf_set_vndr_cmd(struct wiphy *wiphy)
 {
 	wiphy->vendor_commands = brcmf_vendor_cmds;
 	wiphy->n_vendor_commands = ARRAY_SIZE(brcmf_vendor_cmds);
+	wiphy->vendor_events	= brcmf_vendor_events;
+	wiphy->n_vendor_events	= ARRAY_SIZE(brcmf_vendor_events);
 }

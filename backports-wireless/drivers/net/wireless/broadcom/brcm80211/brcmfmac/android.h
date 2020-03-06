@@ -56,6 +56,13 @@ struct brcmf_android_wifi_priv_cmd {
 	int used_len;
 	int total_len;
 };
+#ifdef CONFIG_COMPAT
+typedef struct _compat_brcmf_android_wifi_priv_cmd {
+        compat_caddr_t buf;
+        int used_len;
+        int total_len;
+} compat_brcmf_android_wifi_priv_cmd;
+#endif /* CONFIG_COMPAT */
 
 struct brcmf_android {
 	struct brcmf_pub *drvr;

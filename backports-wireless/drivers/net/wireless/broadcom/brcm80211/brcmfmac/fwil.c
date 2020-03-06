@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2012 Broadcom Corporation
+ * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,6 +30,9 @@
 #include "fwil.h"
 #include "proto.h"
 
+#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
+#include "nv_custom_sysfs_tegra.h"
+#endif /* CPTCFG_NV_CUSTOM_SYSFS_TEGRA */
 
 #define MAX_HEX_DUMP_LEN	64
 
@@ -122,6 +126,9 @@ brcmf_fil_cmd_data(struct brcmf_if *ifp, u32 cmd, void *data, u32 len, bool set)
 	else
 		err = brcmf_proto_query_dcmd(drvr, ifp->ifidx, cmd, data, len);
 
+#ifdef CPTCFG_NV_DEBUG
+	nv_debug_cmd(ifp, cmd, data, len, set, err);
+#endif
 	if (err >= 0)
 		return 0;
 
@@ -161,6 +168,11 @@ brcmf_fil_cmd_data_get(struct brcmf_if *ifp, u32 cmd, void *data, u32 len)
 			   min_t(uint, len, MAX_HEX_DUMP_LEN), "data\n");
 
 	mutex_unlock(&ifp->drvr->proto_block);
+#ifdef CPTCFG_NV_CUSTOM_STATS
+	if ((cmd == BRCMF_C_GET_RSSI) && (err > 0)) {
+		TEGRA_SYSFS_HISTOGRAM_DRIVER_STAT_INC(aggr_num_rssi_ioctl);
+	}
+#endif /* CPTCFG_NV_CUSTOM_STATS */
 
 	return err;
 }
@@ -176,7 +188,11 @@ brcmf_fil_cmd_int_set(struct brcmf_if *ifp, u32 cmd, u32 data)
 	brcmf_dbg(FIL, "ifidx=%d, cmd=%d, value=%d\n", ifp->ifidx, cmd, data);
 	err = brcmf_fil_cmd_data(ifp, cmd, &data_le, sizeof(data_le), true);
 	mutex_unlock(&ifp->drvr->proto_block);
-
+#ifdef CPTCFG_NV_CUSTOM_STATS
+	if ((cmd == BRCMF_C_SET_PM) && (err > 0)) {
+		TEGRA_SYSFS_HISTOGRAM_PM_STATE_UPDATE(data);
+	}
+#endif
 	return err;
 }
 

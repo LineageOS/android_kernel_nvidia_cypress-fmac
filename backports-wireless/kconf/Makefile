@@ -3,8 +3,10 @@ CFLAGS=-Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer
 LXDIALOG := lxdialog/checklist.o lxdialog/inputbox.o lxdialog/menubox.o lxdialog/textbox.o lxdialog/util.o lxdialog/yesno.o
 
 CC := $(HOSTCC)
+LDFLAGS := $(HOSTLDFLAGS)
 
 conf: conf.o zconf.tab.o
+conf: LDFLAGS += $(HOSTLDFLAGS)
 mconf_CFLAGS := $(shell ./lxdialog/check-lxdialog.sh -ccflags) -DLOCALE
 mconf_LDFLAGS := $(shell ./lxdialog/check-lxdialog.sh -ldflags $(CC))
 mconf: CFLAGS += $(mconf_CFLAGS)

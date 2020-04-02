@@ -19,6 +19,7 @@ $(_fmac_ko): $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/$(BOARD_KERNEL_IMAGE_NAME)
 	@mkdir -p $(dir $@)
 	@mkdir -p $(KERNEL_MODULES_OUT)/lib/modules
 	@cp -R $(CYPRESS-FMAC_PATH)/backports-wireless/* $(_fmac_intermediates)/
+	@chmod +x $(_fmac_intermediates)/kconf/lxdialog/check-lxdialog.sh
 	$(hide) +$(KERNEL_MAKE_CMD) $(KERNEL_MAKE_FLAGS) -C $(_fmac_intermediates) ARCH=$(KERNEL_ARCH) $(KERNEL_CROSS_COMPILE) KLIB=$(KERNEL_MODULES_OUT)/lib/modules KLIB_BUILD=$(KERNEL_OUT_RELATIVE) defconfig-brcmfmac
 	$(hide) +$(KERNEL_MAKE_CMD) $(KERNEL_MAKE_FLAGS) -C $(_fmac_intermediates) ARCH=$(KERNEL_ARCH) $(KERNEL_CROSS_COMPILE) KLIB=$(KERNEL_MODULES_OUT)/lib/modules KLIB_BUILD=$(KERNEL_OUT_RELATIVE) modules
 	modules=$$(find $(_fmac_intermediates) -type f -name '*.ko'); \

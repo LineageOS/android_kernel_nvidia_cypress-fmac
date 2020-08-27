@@ -273,6 +273,8 @@ static u8 nl80211_band_to_fwil(enum nl80211_band band)
 	return 0;
 }
 
+static void brcmf_link_down(struct brcmf_cfg80211_vif *vif, u16 reason);
+
 #ifdef CPTCFG_BRCMFMAC_NV_PRIV_CMD
 extern u32  restrict_bw_20;
 #endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
@@ -815,6 +817,9 @@ static s32 brcmf_notify_csa_complete_ind(struct brcmf_if *ifp,
 		bss->channel = chandef.chan;
 		cfg80211_put_bss(wiphy, bss);
 	}
+
+	/* force disconnect AP to let AGO for Blake disconnect too*/
+	brcmf_link_down(ifp->vif, WLAN_REASON_UNSPECIFIED);
 
 	return 0;
 }

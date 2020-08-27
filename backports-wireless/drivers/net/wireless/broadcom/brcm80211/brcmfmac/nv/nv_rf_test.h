@@ -3,7 +3,7 @@
  *
  * NVIDIA Tegra Rf Test for brcmfmac driver
  *
- * Copyright (C) 2014-2019 NVIDIA Corporation. All rights reserved.
+ * Copyright (c) 2014-2020 NVIDIA Corporation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -25,6 +25,10 @@ typedef struct {
 	char *var;
 	atomic_t cur_val;
 } rf_test_params_t;
+
+extern rf_test_params_t rf_test_params[NUM_RF_TEST_PARAMS];
+extern atomic_t rf_test;
+extern atomic_t cur_power_mode;
 
 ssize_t
 tegra_sysfs_rf_test_state_show(struct device *dev,

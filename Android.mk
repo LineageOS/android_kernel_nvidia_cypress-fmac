@@ -4,12 +4,10 @@ CYPRESS-FMAC_PATH := kernel/nvidia/cypress-fmac
 
 include $(CLEAR_VARS)
 
-LOCAL_MODULE               := cypress-fmac
-LOCAL_MODULE_SUFFIX        := .ko
-LOCAL_MODULE_RELATIVE_PATH := modules
-LOCAL_MODULE_CLASS         := SHARED_LIBRARIES
-LOCAL_MULTILIB             := 32
-LOCAL_VENDOR_MODULE        := true
+LOCAL_MODULE        := cypress-fmac
+LOCAL_MODULE_SUFFIX := .ko
+LOCAL_MODULE_CLASS  := ETC
+LOCAL_MODULE_PATH   := $(TARGET_OUT_VENDOR)/lib/modules
 
 _fmac_intermediates := $(call intermediates-dir-for,$(LOCAL_MODULE_CLASS),$(LOCAL_MODULE))
 _fmac_ko := $(_fmac_intermediates)/$(LOCAL_MODULE)$(LOCAL_MODULE_SUFFIX)

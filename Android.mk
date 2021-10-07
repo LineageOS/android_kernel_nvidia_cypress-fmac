@@ -1,5 +1,6 @@
 LOCAL_PATH := $(call my-dir)
 
+ifeq ($(TARGET_PREBUILT_KERNEL),)
 CYPRESS-FMAC_PATH := kernel/nvidia/cypress-fmac
 
 include $(CLEAR_VARS)
@@ -28,3 +29,4 @@ $(_fmac_ko): $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/$(BOARD_KERNEL_IMAGE_NAME)
 	touch $(_fmac_intermediates)/cypress-fmac.ko
 
 include $(BUILD_SYSTEM)/base_rules.mk
+endif

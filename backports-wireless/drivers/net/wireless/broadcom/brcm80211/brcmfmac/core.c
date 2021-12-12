@@ -233,7 +233,7 @@ static int brcmf_netdev_set_mac_address(struct net_device *ndev, void *addr)
 		err = brcmf_fil_iovar_data_set(ifp, "cur_etheraddr", sa->sa_data,
 				       ETH_ALEN);
 	else
-		err = 0;
+		return 0;
 #else
 	err = brcmf_fil_iovar_data_set(ifp, "cur_etheraddr", sa->sa_data,
 				       ETH_ALEN);

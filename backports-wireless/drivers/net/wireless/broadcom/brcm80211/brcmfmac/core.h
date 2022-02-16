@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2010 Broadcom Corporation
- * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
+ * Copyright (C) 2019-2021 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -234,7 +234,7 @@ int brcmf_pktfilter_enable(struct net_device *ndev, bool enable);
 int brcmf_set_country(struct net_device *ndev, char *country);
 int brcmf_set_power(bool on, unsigned long msec);
 int brcmf_start_mkeep_alive(struct net_device *ndev, u8 mkeep_alive_id,
-	u8 *ip_pkt, u16 ip_pkt_len, u8* src_mac, u8* dst_mac, u32 period_msec);
+	u8 *ip_pkt, u16 ip_pkt_len, u8* src_mac, u8* dst_mac, u32 period_msec, u16 ether_type);
 int brcmf_stop_mkeep_alive(struct net_device *ndev, u8 mkeep_alive_id);
 #ifdef CPTCFG_BRCMFMAC_ANDROID
 extern void wifi_card_detect(bool on);

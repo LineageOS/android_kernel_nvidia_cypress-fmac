@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2014 Broadcom Corporation
- * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
+ * Copyright (C) 2019-2021 NVIDIA Corporation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -59,6 +59,7 @@ enum andr_vendor_subcmd {
 	WIFI_SUBCMD_SET_BSSID_BLACKLIST,
 	GSCAN_SUBCMD_ANQPO_CONFIG,
 	WIFI_SUBCMD_SET_RSSI_MONITOR,
+	WIFI_SUBCMD_SET_LATENCY_MODE = 0x101b,
 	RTT_SUBCMD_SET_CONFIG = 0x1100,
 	RTT_SUBCMD_CANCEL_CONFIG,
 	RTT_SUBCMD_GETCAPABILITY,
@@ -71,10 +72,13 @@ enum andr_vendor_subcmd {
 	DEBUG_GET_RING_DATA,
 	DEBUG_GET_FEATURE,
 	DEBUG_RESET_LOGGING,
+	DEBUG_GET_WAKE_REASON_STATS = 0x140d,
+	DEBUG_SET_HAL_PID = 0x1412,
 #endif /* CPTCFG_BRCMFMAC_NV_PRIV_CMD */
 	/* define all wifi calling related commands between 0x1600 and 0x16FF */
 	ANDR_OFFLOAD_SUBCMD_START_MKEEP_ALIVE = 0x1600,
 	ANDR_OFFLOAD_SUBCMD_STOP_MKEEP_ALIVE,
+	ANDR_WIFI_SUBCMD_TX_PWR_SCENARIO = 0x1900,
 };
 
 enum gscan_attributes {
@@ -122,7 +126,8 @@ enum mkeep_alive_attributes {
 	MKEEP_ALIVE_ATTRIBUTE_IP_PKT_LEN,
 	MKEEP_ALIVE_ATTRIBUTE_SRC_MAC_ADDR,
 	MKEEP_ALIVE_ATTRIBUTE_DST_MAC_ADDR,
-	MKEEP_ALIVE_ATTRIBUTE_PERIOD_MSEC
+	MKEEP_ALIVE_ATTRIBUTE_PERIOD_MSEC,
+	MKEEP_ALIVE_ATTRIBUTE_ETHER_TYPE
 };
 
 #define GSCAN_BG_BAND_MASK	0x1
@@ -497,6 +502,7 @@ static int brcmf_cfg80211_start_mkeep_alive(struct wiphy *wiphy, struct wireless
 	u8 src_mac[ETH_ALEN];
 	u8 dst_mac[ETH_ALEN];
 	u32 period_msec = 0;
+	u16 ether_type = 0;
 	const struct nlattr *iter;
 	gfp_t kflags = in_atomic() ? GFP_ATOMIC : GFP_KERNEL;
 
@@ -539,6 +545,9 @@ static int brcmf_cfg80211_start_mkeep_alive(struct wiphy *wiphy, struct wireless
 			case MKEEP_ALIVE_ATTRIBUTE_PERIOD_MSEC:
 				period_msec = nla_get_u32(iter);
 				break;
+			case MKEEP_ALIVE_ATTRIBUTE_ETHER_TYPE:
+				ether_type = nla_get_u16(iter);
+				break;
 			default:
 				brcmf_err("Unknown type: %d\n", type);
 				ret = -EINVAL;
@@ -553,7 +562,7 @@ static int brcmf_cfg80211_start_mkeep_alive(struct wiphy *wiphy, struct wireless
 	}
 
 	ret = brcmf_start_mkeep_alive(ndev, mkeep_alive_id, ip_pkt, ip_pkt_len, src_mac,
-		dst_mac, period_msec);
+		dst_mac, period_msec, ether_type);
 	if (ret < 0) {
 		brcmf_err("start_mkeep_alive is failed ret: %d\n", ret);
 	}
@@ -723,6 +732,38 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 		{
 			.vendor_id = GOOGLE_OUI,
 			.subcmd = DEBUG_RESET_LOGGING
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = ANDR_WIFI_SUBCMD_TX_PWR_SCENARIO
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = WIFI_SUBCMD_SET_LATENCY_MODE
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_SET_HAL_PID
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.doit = wl_cfgvendor_unsupported_feature
+	},
+	{
+		{
+			.vendor_id = GOOGLE_OUI,
+			.subcmd = DEBUG_GET_WAKE_REASON_STATS
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_WDEV | WIPHY_VENDOR_CMD_NEED_NETDEV,
 		.doit = wl_cfgvendor_unsupported_feature

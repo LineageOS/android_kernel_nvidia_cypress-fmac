@@ -3,7 +3,7 @@
  *
  * NVIDIA Tegra debug messages for brcmfmac driver
  *
- * Copyright (C) 2019 NVIDIA Corporation. All rights reserved.
+ * Copyright (C) 2019-2021 NVIDIA Corporation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -26,6 +26,10 @@
 #include "fwil.h"
 #include "debug.h"
 #include "nv_debug.h"
+
+#ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
+#include "nv_custom_sysfs_tegra.h"
+#endif /* CPTCFG_NV_CUSTOM_SYSFS_TEGRA */
 
 #define JOIN_IOVAR "join\0"
 
@@ -198,6 +202,13 @@ static void nv_dhcp_messages(char *dump_data, char *netif, bool direction)
 		} else if (dump_hex == 0x0105) {
 			NV_DEBUG_PRINT(("[%s][%s] DHCP: ACK\n",
 					netif, direction ? "TX" : "RX"));
+#ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
+			/* activate bw_estimator since DHCP is completed */
+			if (!direction) { // direction should be RX for STA mode
+				/* the actual bw can never be one. So using value 1 as flag*/
+				bcmdhd_stat.driver_stat.cur_bw_est = 1;
+			}
+#endif /* CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA */
 		} else {
 			NV_DEBUG_PRINT(("[%s][%s] DHCP: 0x%X\n",
 					netif, direction ? "TX" : "RX",

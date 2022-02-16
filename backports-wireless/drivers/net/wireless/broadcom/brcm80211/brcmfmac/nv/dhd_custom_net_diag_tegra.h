@@ -1,7 +1,7 @@
 /*
  * NVIDIA Tegra Network Diagnostics for BCMDHD driver
  *
- * Copyright (C) 2016-2019 NVIDIA Corporation. All rights reserved.
+ * Copyright (C) 2016-2021 NVIDIA Corporation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -38,6 +38,8 @@ typedef struct tegra_net_diag_data {
 } tegra_net_diag_data_t;
 
 void tegra_net_diag_get_value(tegra_net_diag_data_t *net_diag_data);
+
+void tegra_net_diag_read_value(tegra_net_diag_data_t *net_diag_data);
 
 int tegra_net_diag_register(struct device *dev);
 

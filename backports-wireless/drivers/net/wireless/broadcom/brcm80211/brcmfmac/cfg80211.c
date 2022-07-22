@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2010 Broadcom Corporation
- * Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -47,6 +47,10 @@
 #ifdef CPTCFG_NV_CUSTOM_SYSFS_TEGRA
 #include "nv_custom_sysfs_tegra.h"
 #endif /* CPTCFG_NV_CUSTOM_SYSFS_TEGRA */
+
+#ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
+#include "dhd_custom_net_bw_est_tegra.h"
+#endif
 
 #define BRCMF_SCAN_IE_LEN_MAX		2048
 
@@ -2442,6 +2446,10 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
 
 	err  = brcmf_fil_bsscfg_data_set(ifp, "join", ext_join_params,
 					 join_params_size);
+#ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
+	tegra_net_bw_est_set_dst_macaddr(ext_join_params->assoc_le.bssid);
+#endif
+
 	kfree(ext_join_params);
 	if (!err)
 		/* This is it. join command worked, we are done */

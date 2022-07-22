@@ -3,7 +3,7 @@
  *
  * NVIDIA Tegra Sysfs for brcmfmac driver
  *
- * Copyright (c) 2014-2021 NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2014-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -175,12 +175,6 @@ stat_work_func(struct work_struct *work)
 			0);
 #endif
 	}
-#ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
-	if (bcmdhd_stat.driver_stat.cur_bw_est == 1) {
-		memset(&net_diag_data, 0, sizeof(tegra_net_diag_data_t));
-		tegra_net_diag_get_value(&net_diag_data);
-	}
-#endif /* CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA */
 
 	/* Update the overall bcmdhd stats */
 	if (MSEC(now) - MSEC(bcmdhd_stat.time) > bcmdhd_stat_rate_ms) {
@@ -188,10 +182,8 @@ stat_work_func(struct work_struct *work)
 		TEGRA_SYSFS_HISTOGRAM_AGGR_DRV_STATE(now);
 		TEGRA_SYSFS_HISTOGRAM_AGGR_PM_STATE(now);
 #ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
-		if (bcmdhd_stat.driver_stat.cur_bw_est != 1) {
-			memset(&net_diag_data, 0, sizeof(tegra_net_diag_data_t));
-			tegra_net_diag_read_value(&net_diag_data);
-		}
+		memset(&net_diag_data, 0, sizeof(tegra_net_diag_data_t));
+		tegra_net_diag_read_value(&net_diag_data);
 		bcmdhd_stat.driver_stat.cur_bw_est = net_diag_data.bw_est;
 		bwValue = net_diag_data.bw_est;
 		roundOffBw = 0;
@@ -256,7 +248,7 @@ tegra_sysfs_histogram_stat_show(struct device *dev,
 	TEGRA_SYSFS_HISTOGRAM_AGGR_PM_STATE(now);
 #ifdef CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA
 	memset(&net_diag_data, 0, sizeof(tegra_net_diag_data_t));
-	tegra_net_diag_get_value(&net_diag_data);
+	tegra_net_diag_read_value(&net_diag_data);
 #endif /* CPTCFG_BRCMFMAC_NV_NET_BW_EST_TEGRA */
 	/* print statistics head */
 	n = 0;

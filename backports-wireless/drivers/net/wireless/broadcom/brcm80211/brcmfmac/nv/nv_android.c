@@ -201,7 +201,7 @@ int wl_cfgvendor_unsupported_feature(struct wiphy *wiphy,
 	struct wireless_dev *wdev, const void  *data, int len)
 {
 	// return unsupported error code
-	return WIFI_ERROR_NOT_SUPPORTED;
+	return -EOPNOTSUPP;
 }
 
 int wl_cfgvendor_get_ver(struct wiphy *wiphy,
@@ -227,7 +227,7 @@ int wl_cfgvendor_get_ver(struct wiphy *wiphy,
 		return -EINVAL;
 
 	brcmf_android_wake_lock(ifp->drvr);
-	ret = WIFI_SUCCESS;
+	ret = 0;
 	type = nla_type(data);
 	if (type == LOGGER_ATTRIBUTE_DRIVER_VER) {
 		/* get driver version */
@@ -243,7 +243,7 @@ int wl_cfgvendor_get_ver(struct wiphy *wiphy,
 		brcmf_dbg(INFO, "Firmware version = %s\n", buf);
 	} else {
 		brcmf_err("Unsupported Loggler %d\n", type);
-		ret = WIFI_ERROR_NOT_SUPPORTED;
+		ret = -EOPNOTSUPP;
 		goto exit;
 	}
 

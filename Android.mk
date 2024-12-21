@@ -14,9 +14,8 @@ _fmac_intermediates := $(call intermediates-dir-for,$(LOCAL_MODULE_CLASS),$(LOCA
 _fmac_ko := $(_fmac_intermediates)/$(LOCAL_MODULE)$(LOCAL_MODULE_SUFFIX)
 KERNEL_OUT := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
 KERNEL_OUT_RELATIVE := ../../KERNEL_OBJ
-vendorimage_intermediates ?= $(TARGET_OUT_INTERMEDIATES)/PACKAGING/vendor_intermediates
 
-$(_fmac_ko): $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/$(BOARD_KERNEL_IMAGE_NAME) $(vendorimage_intermediates)/file_list.txt
+$(_fmac_ko): $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/$(BOARD_KERNEL_IMAGE_NAME)
 	@mkdir -p $(dir $@)
 	@mkdir -p $(KERNEL_MODULES_OUT)/lib/modules
 	@cp -R $(CYPRESS-FMAC_PATH)/backports-wireless/* $(_fmac_intermediates)/
@@ -27,8 +26,6 @@ $(_fmac_ko): $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/$(BOARD_KERNEL_IMAGE_NAME) $
 	for f in $$modules; do \
 		$(KERNEL_TOOLCHAIN_PATH)strip --strip-unneeded $$f; \
 		cp $$f $(KERNEL_MODULES_OUT)/lib/modules; \
-		module_name=$$(basename $$f); \
-		echo lib/modules/"$$module_name" >> $(vendorimage_intermediates)/file_list.txt; \
 	done;
 	touch $(_fmac_intermediates)/cypress-fmac.ko
 

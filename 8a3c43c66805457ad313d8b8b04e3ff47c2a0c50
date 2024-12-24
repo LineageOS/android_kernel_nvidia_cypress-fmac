@@ -16,6 +16,23 @@
       "message": "Solves the issue.",
       "revId": "8a3c43c66805457ad313d8b8b04e3ff47c2a0c50",
       "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "ae80f051_6c8811a5",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 14048
+      },
+      "writtenOn": "2024-12-24T19:57:53Z",
+      "side": 1,
+      "message": "Hermetic partitions requires that all files getting installed to a partition be in the partitions file list. Even if ignoring that works for now, when google fixes their bug, this will cause a silent failure that will result in broken wifi on builds. This needs fixed in a way that stops the failures on some machines with dirty builds, but doesn\u0027t stop writing to the file list.",
+      "revId": "8a3c43c66805457ad313d8b8b04e3ff47c2a0c50",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71"
     }
   ]
 }
